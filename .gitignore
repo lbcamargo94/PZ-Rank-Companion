@@ -1,2 +1,15 @@
 node_modules/
 dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Variáveis de ambiente
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
