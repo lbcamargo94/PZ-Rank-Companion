@@ -30,7 +30,9 @@ let config = { ...DEFAULT_CONFIG };
 
 function loadConfig() {
   try {
-    return { ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(configPath(), 'utf-8')) };
+    const saved = JSON.parse(fs.readFileSync(configPath(), 'utf-8'));
+    delete saved.apiUrl; // apiUrl não é configurável pelo usuário — sempre usa o default
+    return { ...DEFAULT_CONFIG, ...saved };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
