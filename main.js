@@ -54,6 +54,60 @@ let syncStatus   = 'idle';  // 'idle' | 'syncing' | 'ok' | 'error'
 let watcherError = null;    // null = ok, string = mensagem de erro
 let gameRunning  = false;   // true se ProjectZomboid64.exe está em execução
 
+// ── Retry queue ───────────────────────────────────────────────────────────
+
+function queuePath() {
+  return path.join(app.getPath('userData'), 'pending-syncs.json');
+}
+
+function loadQueue() {
+  try { return JSON.parse(fs.readFileSync(queuePath(), 'utf-8')); } catch { return []; }
+}
+
+function saveQueue(queue) {
+  try { fs.writeFileSync(queuePath(), JSON.stringify(queue, null, 2), 'utf-8'); } catch {}
+}
+
+function enqueue(code) {
+  const queue = loadQueue();
+  if (queue.some(i => i.code === code)) return;  // já está na fila
+  queue.push({ code, addedAt: Date.now() });
+  saveQueue(queue);
+  console.log('[queue] adicionado:', code.slice(0, 20) + '…');
+}
+
+async function retryQueue() {
+  if (!config.playerToken) return;
+  const queue = loadQueue();
+  if (queue.length === 0) return;
+
+  console.log(`[queue] tentando reenviar ${queue.length} item(s)`);
+  const remaining = [];
+
+  for (const item of queue) {
+    try {
+      const result = await postSync(config.playerToken, item.code);
+      lastSync   = { ts: Date.now(), characterName: result.character_name, score: result.score };
+      syncStatus = 'ok';
+      notify('✓ Sync recuperado!', result.character_name
+        ? `${result.character_name}  •  ${result.score ?? 0} pts`
+        : 'Rank atualizado!');
+      updateTray();
+      sendToRenderer('status-update', getStatusPayload());
+    } catch (err) {
+      if (err.status === 401 || err.status === 403) {
+        config.playerToken = '';
+        saveConfig();
+        showMainWindow();
+        break;
+      }
+      remaining.push(item);
+    }
+  }
+
+  saveQueue(remaining);
+}
+
 // ── App lifecycle ─────────────────────────────────────────────────────────
 
 app.setName('PZ Rank Companion');
@@ -69,6 +123,8 @@ app.whenReady().then(() => {
   startWatcher();
   checkGameRunning();
   setInterval(checkGameRunning, 30_000);
+  retryQueue();
+  setInterval(retryQueue, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
 });
 
@@ -177,9 +233,11 @@ function startWatcher() {
     sendToRenderer('status-update', getStatusPayload());
   });
 
-  watcher.on('add', (filePath) => {
+  const onTxtFile = (filePath) => {
     if (path.extname(filePath).toLowerCase() === '.txt') handleNewRankFile(filePath);
-  });
+  };
+  watcher.on('add',    onTxtFile);
+  watcher.on('change', onTxtFile);
 
   watcher.on('error', (err) => {
     watcherError = err.message;
@@ -193,7 +251,7 @@ function startWatcher() {
 function extractCode(filePath) {
   try {
     const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
-    return lines.map(l => l.trim()).find(l => l.startsWith('PZRX2:')) ?? null;
+    return lines.map(l => l.trim()).find(l => l.startsWith('PZRX1:') || l.startsWith('PZRX2:')) ?? null;
   } catch {
     return null;
   }
@@ -227,12 +285,15 @@ async function handleNewRankFile(filePath) {
   } catch (err) {
     syncStatus = 'error';
     console.error('[sync] erro:', err.message);
-    notify('✗ Falha no sync', err.message);
 
     if (err.status === 401 || err.status === 403) {
       config.playerToken = '';
       saveConfig();
       showMainWindow();
+      notify('✗ Sessão expirada', 'Reconecte o jogador no app.');
+    } else {
+      enqueue(code);
+      notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.');
     }
   }
 
