@@ -1,0 +1,45 @@
+{
+  "name": "pz-rank-companion",
+  "version": "1.0.0",
+  "description": "PZ Community Rank — Auto-sync companion",
+  "main": "main.js",
+  "scripts": {
+    "start": "SET ELECTRON_RUN_AS_NODE=&& electron .",
+    "build": "electron-builder --win"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.pzrank.companion",
+    "productName": "PZ Rank Companion",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**",
+      "assets/**"
+    ],
+    "win": {
+      "target": [
+        { "target": "nsis",     "arch": ["x64"] },
+        { "target": "portable", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico",
+      "sign": null,
+      "signingHashAlgorithms": null
+    },
+    "nsis": {
+      "oneClick": true,
+      "createDesktopShortcut": false,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
+    }
+  }
+}

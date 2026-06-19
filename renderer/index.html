@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <title>PZ Rank Companion</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+
+    <header class="header">
+      <span class="header-icon">☣</span>
+      <div>
+        <h1>PZ Rank Companion</h1>
+        <p>Auto-sync para Project Zomboid</p>
+      </div>
+    </header>
+
+    <!-- Conectado -->
+    <section class="card" id="sec-connected" hidden>
+      <div class="status-row">
+        <span class="dot"></span>
+        <span class="nick" id="nick-label"></span>
+        <button class="btn-link" id="btn-disconnect">desconectar</button>
+      </div>
+      <div class="badges-row">
+        <span class="badge" id="badge-game">◻ Jogo não detectado</span>
+        <span class="badge" id="badge-sync">Monitorando...</span>
+      </div>
+    </section>
+
+    <!-- Setup -->
+    <section class="card" id="sec-setup">
+      <h2>Conectar jogador</h2>
+      <p class="hint">Use o nick exatamente como aparece no site do ranking.</p>
+      <div class="field">
+        <label for="input-nick">Nick do Rank</label>
+        <input id="input-nick" type="text" placeholder="Ex: Ullyana" autocomplete="off" spellcheck="false" />
+      </div>
+      <button class="btn btn-primary" id="btn-connect">Conectar</button>
+      <p class="error" id="connect-error" hidden></p>
+    </section>
+
+    <!-- Último sync -->
+    <section class="card" id="sec-last-sync" hidden>
+      <h2>Último sync</h2>
+      <div class="info-grid">
+        <span class="info-label">Personagem</span><span id="last-char">—</span>
+        <span class="info-label">Pontuação</span> <span id="last-score">—</span>
+        <span class="info-label">Quando</span>    <span id="last-time">—</span>
+      </div>
+    </section>
+
+    <!-- Configurações -->
+    <section class="card" id="sec-settings" hidden>
+      <h2>Configurações</h2>
+      <div class="field">
+        <label>Pasta dos arquivos do mod</label>
+        <div class="input-row">
+          <input id="input-watchdir" type="text" readonly />
+          <button class="btn btn-ghost btn-sm btn-icon" id="btn-pick-folder" title="Selecionar pasta">📁</button>
+        </div>
+        <p class="field-warn" id="watchdir-warn" hidden>⚠ Pasta não encontrada. Clique em 📁 para selecionar manualmente.</p>
+      </div>
+      <div class="toggle-row">
+        <span>Iniciar com Windows</span>
+        <label class="toggle">
+          <input type="checkbox" id="chk-autostart" />
+          <span class="slider"></span>
+        </label>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <button class="btn-link dim" id="btn-open-site">Abrir site do ranking ↗</button>
+    </footer>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
