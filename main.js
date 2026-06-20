@@ -21,7 +21,7 @@ function configPath() {
 const DEFAULT_CONFIG = {
   nick:        '',
   playerToken: '',
-  apiUrl:      'https://pz-rank.vercel.app',
+  apiUrl:      'https://pz-rank-backend.vercel.app',
   watchDir:    path.join(os.homedir(), 'Zomboid', 'Lua', 'pz_rank'),
   autostart:   false,
 };
