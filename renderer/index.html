@@ -11,11 +11,35 @@
 
     <header class="header">
       <span class="header-icon">☣</span>
-      <div>
+      <div class="header-text">
         <h1>PZ Rank Companion</h1>
         <p>Auto-sync para Project Zomboid</p>
       </div>
+      <span class="app-version" id="app-version"></span>
     </header>
+
+    <!-- Banner de atualização -->
+    <div id="update-banner" class="update-banner" hidden>
+      <div class="update-banner-content">
+        <span class="update-icon" id="update-icon">↑</span>
+        <div class="update-text">
+          <span class="update-title" id="update-title">Verificando atualizações...</span>
+          <span class="update-sub"   id="update-sub"></span>
+        </div>
+      </div>
+      <div class="update-actions">
+        <div class="update-progress-wrap" id="update-progress-wrap" hidden>
+          <div class="update-progress-bar" id="update-progress-bar"></div>
+          <span class="update-progress-label" id="update-progress-label">0%</span>
+        </div>
+        <button class="btn btn-update" id="btn-install-update" hidden>
+          Instalar e reiniciar
+        </button>
+        <button class="btn btn-ghost btn-sm" id="btn-check-update" title="Verificar atualizações">
+          ↻
+        </button>
+      </div>
+    </div>
 
     <!-- Conectado -->
     <section class="card" id="sec-connected" hidden>

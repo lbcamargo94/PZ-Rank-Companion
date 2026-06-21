@@ -41,10 +41,87 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.header-icon { font-size: 30px; color: var(--red); line-height: 1; }
+.header-icon  { font-size: 30px; color: var(--red); line-height: 1; }
+.header-text  { flex: 1; }
+.header h1    { font-size: 15px; font-weight: 600; color: #f0f0f0; }
+.header p     { font-size: 11px; color: var(--muted); }
+.app-version  { font-size: 10px; color: var(--muted); align-self: flex-start; margin-top: 2px; }
 
-.header h1   { font-size: 15px; font-weight: 600; color: #f0f0f0; }
-.header p    { font-size: 11px; color: var(--muted); }
+/* ── Update banner ──────────────────────── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+}
+
+.update-banner-content { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+
+.update-icon {
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+  line-height: 1;
+}
+
+.update-text  { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.update-title { font-weight: 600; color: #f0f0f0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.update-sub   { font-size: 11px; color: var(--subtle); }
+
+.update-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+
+.update-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 90px;
+}
+.update-progress-bar {
+  height: 4px;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width 0.3s;
+  flex: 1;
+  min-width: 0;
+}
+.update-progress-label { font-size: 11px; color: var(--subtle); white-space: nowrap; }
+
+/* Variantes de cor do banner */
+.update-checking   { border-color: #333; }
+.update-checking   .update-icon { color: var(--subtle); animation: spin 1s linear infinite; }
+.update-ok         { border-color: #1a3d2b; background: #0d2018; }
+.update-ok         .update-icon { color: var(--green); }
+.update-available  { border-color: #2a3d1a; background: #141f0d; }
+.update-available  .update-icon { color: var(--green); }
+.update-downloading{ border-color: #1a2d3d; background: #0d1820; }
+.update-downloading .update-icon { color: #4a9eff; animation: bounce 0.8s ease-in-out infinite; }
+.update-ready      { border-color: #3d2a00; background: #1f1500; }
+.update-ready      .update-icon { color: var(--orange); }
+.update-error      { border-color: #3d1a1a; background: #200d0d; }
+.update-error      .update-icon { color: var(--red); }
+
+.btn-update {
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-update:hover { background: #cf6d17; }
+
+@keyframes spin   { to { transform: rotate(360deg); } }
+@keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 
 /* ── Cards ──────────────────────────────── */
 .card {

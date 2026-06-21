@@ -15,7 +15,14 @@ async function init() {
   $('input-watchdir').value  = cfg.watchDir;
   $('chk-autostart').checked = cfg.autostart;
 
+  // Mostra versão no header
+  try {
+    const ver = await api.getAppVersion?.();
+    if (ver) $('app-version').textContent = `v${ver}`;
+  } catch {}
+
   render(status);
+  initUpdateBanner();
 }
 
 function render(status) {
@@ -67,6 +74,94 @@ function renderSyncBadge(status) {
     const map = { idle: 'Monitorando...', syncing: 'Sincronizando...', ok: 'Sync OK ✓', error: 'Erro no sync' };
     el.textContent = map[status.syncStatus] ?? 'Monitorando...';
     el.className   = status.syncStatus === 'ok' ? 'badge badge-green' : 'badge badge-muted';
+  }
+}
+
+// ── Update banner ─────────────────────────────────────────────────────────
+
+function initUpdateBanner() {
+  api.onUpdateStatus(renderUpdateStatus);
+  $('btn-check-update').addEventListener('click', () => {
+    $('btn-check-update').disabled = true;
+    renderUpdateStatus({ phase: 'checking' });
+    api.checkForUpdates().finally(() => {
+      setTimeout(() => { $('btn-check-update').disabled = false; }, 5000);
+    });
+  });
+  $('btn-install-update').addEventListener('click', () => api.installUpdate());
+}
+
+function renderUpdateStatus(data) {
+  const banner      = $('update-banner');
+  const icon        = $('update-icon');
+  const title       = $('update-title');
+  const sub         = $('update-sub');
+  const progressWrap = $('update-progress-wrap');
+  const progressBar  = $('update-progress-bar');
+  const progressLabel = $('update-progress-label');
+  const btnInstall  = $('btn-install-update');
+
+  progressWrap.hidden = true;
+  btnInstall.hidden   = true;
+
+  switch (data.phase) {
+    case 'checking':
+      banner.hidden      = false;
+      banner.className   = 'update-banner update-checking';
+      icon.textContent   = '↻';
+      title.textContent  = 'Verificando atualizações...';
+      sub.textContent    = '';
+      break;
+
+    case 'up-to-date':
+      banner.hidden      = false;
+      banner.className   = 'update-banner update-ok';
+      icon.textContent   = '✓';
+      title.textContent  = 'Aplicativo atualizado';
+      sub.textContent    = 'Você está usando a versão mais recente.';
+      // Esconde após 4s
+      setTimeout(() => { banner.hidden = true; }, 4000);
+      break;
+
+    case 'available':
+      banner.hidden      = false;
+      banner.className   = 'update-banner update-available';
+      icon.textContent   = '↑';
+      title.textContent  = `Nova versão disponível: ${data.version}`;
+      sub.textContent    = 'Baixando atualização...';
+      break;
+
+    case 'downloading':
+      banner.hidden       = false;
+      banner.className    = 'update-banner update-downloading';
+      icon.textContent    = '↓';
+      title.textContent   = 'Baixando atualização...';
+      sub.textContent     = '';
+      progressWrap.hidden = false;
+      progressBar.style.width = `${data.percent}%`;
+      progressLabel.textContent = `${data.percent}%`;
+      break;
+
+    case 'downloaded':
+      banner.hidden      = false;
+      banner.className   = 'update-banner update-ready';
+      icon.textContent   = '★';
+      title.textContent  = `Versão ${data.version} pronta para instalar`;
+      sub.textContent    = 'O app será reiniciado após a instalação.';
+      btnInstall.hidden  = false;
+      break;
+
+    case 'error':
+      banner.hidden      = false;
+      banner.className   = 'update-banner update-error';
+      icon.textContent   = '✕';
+      title.textContent  = 'Erro ao verificar atualizações';
+      sub.textContent    = data.message || '';
+      setTimeout(() => { banner.hidden = true; }, 6000);
+      break;
+
+    default:
+      banner.hidden = true;
   }
 }
 

@@ -4,12 +4,44 @@ const {
   app, BrowserWindow, Tray, Menu, Notification,
   nativeImage, ipcMain, shell, dialog,
 } = require('electron');
-const path     = require('path');
-const fs       = require('fs');
-const os       = require('os');
-const https    = require('https');
-const http     = require('http');
-const { exec } = require('child_process');
+const path             = require('path');
+const fs               = require('fs');
+const os               = require('os');
+const https            = require('https');
+const http             = require('http');
+const { exec }         = require('child_process');
+const { autoUpdater }  = require('electron-updater');
+
+// ── Auto-updater config ───────────────────────────────────────────────────
+autoUpdater.autoDownload         = false; // user confirms download
+autoUpdater.autoInstallOnAppQuit = false;
+autoUpdater.logger               = null;  // sem log verboso em produção
+
+autoUpdater.on('checking-for-update', () => {
+  sendToRenderer('update-status', { phase: 'checking' });
+});
+autoUpdater.on('update-available', (info) => {
+  sendToRenderer('update-status', { phase: 'available', version: info.version });
+  notify('Atualização disponível!', `Versão ${info.version} pronta para download.`);
+  // inicia o download automaticamente
+  autoUpdater.downloadUpdate();
+});
+autoUpdater.on('update-not-available', () => {
+  sendToRenderer('update-status', { phase: 'up-to-date' });
+});
+autoUpdater.on('download-progress', (p) => {
+  sendToRenderer('update-status', { phase: 'downloading', percent: Math.round(p.percent) });
+});
+autoUpdater.on('update-downloaded', (info) => {
+  sendToRenderer('update-status', { phase: 'downloaded', version: info.version });
+  notify('Atualização pronta!', `Versão ${info.version} baixada. Clique para instalar.`);
+  updateTray();
+});
+autoUpdater.on('error', (err) => {
+  const msg = err.message || String(err);
+  sendToRenderer('update-status', { phase: 'error', message: msg });
+  console.error('[updater]', msg);
+});
 
 // ── Config ────────────────────────────────────────────────────────────────
 
@@ -129,6 +161,13 @@ app.whenReady().then(() => {
   retryQueue();
   setInterval(retryQueue, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
+
+  // Verificar atualizações ao iniciar (somente no build empacotado)
+  if (app.isPackaged) {
+    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 4000);
+    // Re-verifica a cada 4 horas
+    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60_000);
+  }
 });
 
 app.on('window-all-closed', (e) => e.preventDefault());
@@ -397,6 +436,21 @@ ipcMain.handle('disconnect', () => {
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url));
 
 ipcMain.handle('open-site', () => shell.openExternal(config.apiUrl));
+
+ipcMain.handle('check-for-updates', async () => {
+  if (!app.isPackaged) {
+    sendToRenderer('update-status', { phase: 'up-to-date' });
+    return;
+  }
+  try { await autoUpdater.checkForUpdates(); }
+  catch (err) { sendToRenderer('update-status', { phase: 'error', message: err.message }); }
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('pick-folder', async () => {
   const defaultPath = fs.existsSync(config.watchDir) ? config.watchDir : os.homedir();
