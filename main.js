@@ -13,33 +13,40 @@ const { exec }         = require('child_process');
 const { autoUpdater }  = require('electron-updater');
 
 // ── Auto-updater config ───────────────────────────────────────────────────
-autoUpdater.autoDownload         = false; // user confirms download
+autoUpdater.autoDownload         = false; // disparo manual via downloadUpdate() no evento update-available
 autoUpdater.autoInstallOnAppQuit = false;
 autoUpdater.logger               = null;  // sem log verboso em produção
 
+// Estado atual do update (mantido em memória para o renderer buscar ao abrir a janela)
+let updateState = null; // { phase, version?, percent?, message? }
+
+function setUpdateState(state) {
+  updateState = state;
+  sendToRenderer('update-status', state);
+}
+
 autoUpdater.on('checking-for-update', () => {
-  sendToRenderer('update-status', { phase: 'checking' });
+  setUpdateState({ phase: 'checking' });
 });
 autoUpdater.on('update-available', (info) => {
-  sendToRenderer('update-status', { phase: 'available', version: info.version });
+  setUpdateState({ phase: 'available', version: info.version });
   notify('Atualização disponível!', `Versão ${info.version} pronta para download.`);
-  // inicia o download automaticamente
   autoUpdater.downloadUpdate();
 });
 autoUpdater.on('update-not-available', () => {
-  sendToRenderer('update-status', { phase: 'up-to-date' });
+  setUpdateState({ phase: 'up-to-date' });
 });
 autoUpdater.on('download-progress', (p) => {
-  sendToRenderer('update-status', { phase: 'downloading', percent: Math.round(p.percent) });
+  setUpdateState({ phase: 'downloading', percent: Math.round(p.percent) });
 });
 autoUpdater.on('update-downloaded', (info) => {
-  sendToRenderer('update-status', { phase: 'downloaded', version: info.version });
+  setUpdateState({ phase: 'downloaded', version: info.version });
   notify('Atualização pronta!', `Versão ${info.version} baixada. Clique para instalar.`);
   updateTray();
 });
 autoUpdater.on('error', (err) => {
   const msg = err.message || String(err);
-  sendToRenderer('update-status', { phase: 'error', message: msg });
+  setUpdateState({ phase: 'error', message: msg });
   console.error('[updater]', msg);
 });
 
@@ -246,6 +253,10 @@ function showMainWindow() {
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.setMenu(null);
   mainWindow.on('close', (e) => { e.preventDefault(); mainWindow.hide(); });
+  // Envia o estado atual do update assim que o renderer estiver pronto
+  mainWindow.webContents.once('did-finish-load', () => {
+    if (updateState) mainWindow.webContents.send('update-status', updateState);
+  });
 }
 
 // ── File watcher ──────────────────────────────────────────────────────────
@@ -450,7 +461,8 @@ ipcMain.handle('install-update', () => {
   autoUpdater.quitAndInstall(false, true);
 });
 
-ipcMain.handle('get-app-version', () => app.getVersion());
+ipcMain.handle('get-app-version',    () => app.getVersion());
+ipcMain.handle('get-update-status', () => updateState);
 
 ipcMain.handle('pick-folder', async () => {
   const defaultPath = fs.existsSync(config.watchDir) ? config.watchDir : os.homedir();

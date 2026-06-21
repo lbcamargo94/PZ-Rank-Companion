@@ -23,6 +23,12 @@ async function init() {
 
   render(status);
   initUpdateBanner();
+
+  // Recupera estado do update caso a janela tenha aberto após o check já ter rodado
+  try {
+    const us = await api.getUpdateStatus?.();
+    if (us) renderUpdateStatus(us);
+  } catch {}
 }
 
 function render(status) {

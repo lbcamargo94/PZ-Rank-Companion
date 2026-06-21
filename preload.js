@@ -14,8 +14,9 @@ contextBridge.exposeInMainWorld('api', {
   pickFolder:      ()        => ipcRenderer.invoke('pick-folder'),
   onStatusUpdate:  (cb)      => ipcRenderer.on('status-update',  (_, data) => cb(data)),
   // Auto-update
-  getAppVersion:   ()        => ipcRenderer.invoke('get-app-version'),
-  checkForUpdates: ()        => ipcRenderer.invoke('check-for-updates'),
-  installUpdate:   ()        => ipcRenderer.invoke('install-update'),
-  onUpdateStatus:  (cb)      => ipcRenderer.on('update-status',  (_, data) => cb(data)),
+  getAppVersion:    ()       => ipcRenderer.invoke('get-app-version'),
+  getUpdateStatus:  ()       => ipcRenderer.invoke('get-update-status'),
+  checkForUpdates:  ()       => ipcRenderer.invoke('check-for-updates'),
+  installUpdate:    ()       => ipcRenderer.invoke('install-update'),
+  onUpdateStatus:   (cb)     => ipcRenderer.on('update-status', (_, data) => cb(data)),
 });
