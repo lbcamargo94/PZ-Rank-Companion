@@ -254,7 +254,9 @@ function startWatcher() {
 function extractCode(filePath) {
   try {
     const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
-    return lines.map(l => l.trim()).find(l => l.startsWith('PZRX1:') || l.startsWith('PZRX2:')) ?? null;
+    // Lê o ÚLTIMO código — arquivo acumula histórico, o mais recente fica no final
+    const pzrLines = lines.map(l => l.trim()).filter(l => l.startsWith('PZRX1:') || l.startsWith('PZRX2:'));
+    return pzrLines.length > 0 ? pzrLines[pzrLines.length - 1] : null;
   } catch {
     return null;
   }
