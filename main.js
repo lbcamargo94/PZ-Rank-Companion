@@ -17,11 +17,14 @@ function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
 }
 
-// apiUrl: configurada aqui pelo desenvolvedor antes do build — não exposta ao usuário.
+// apiUrl: selecionada automaticamente — produção quando empacotado, local em desenvolvimento.
+const PROD_API_URL = 'https://pz-rank-backend.vercel.app';
+const DEV_API_URL  = 'http://localhost:3000';
+
 const DEFAULT_CONFIG = {
   nick:        '',
   playerToken: '',
-  apiUrl:      'https://pz-rank-backend.vercel.app',
+  apiUrl:      app.isPackaged ? PROD_API_URL : DEV_API_URL,
   watchDir:    path.join(os.homedir(), 'Zomboid', 'Lua', 'pz_rank'),
   autostart:   false,
 };

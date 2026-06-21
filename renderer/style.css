@@ -1,4 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 
 :root {
   --bg:        #111;
@@ -200,13 +201,13 @@ body {
   border: none;
   cursor: pointer;
   font-family: inherit;
-  color: var(--muted);
+  color: var(--subtle);
   font-size: 11px;
   padding: 0;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-.btn-link:hover { color: var(--subtle); }
+.btn-link:hover { color: var(--text); }
 .btn-link.dim   { opacity: .6; }
 
 /* ── Info grid ──────────────────────────── */
