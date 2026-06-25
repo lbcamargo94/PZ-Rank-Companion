@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 const {
   app, BrowserWindow, Tray, Menu, Notification,
@@ -286,11 +286,17 @@ function startWatcher() {
     sendToRenderer('status-update', getStatusPayload());
   });
 
-  const onTxtFile = (filePath) => {
-    if (path.extname(filePath).toLowerCase() === '.txt') handleNewRankFile(filePath);
+  const onFile = (filePath) => {
+    const ext  = path.extname(filePath).toLowerCase();
+    const base = path.basename(filePath);
+    if (ext === '.txt') {
+      handleNewRankFile(filePath);
+    } else if (ext === '.json' && base.startsWith('pz_rank_sandbox_')) {
+      handleNewSandboxFile(filePath);
+    }
   };
-  watcher.on('add',    onTxtFile);
-  watcher.on('change', onTxtFile);
+  watcher.on('add',    onFile);
+  watcher.on('change', onFile);
 
   watcher.on('error', (err) => {
     watcherError = err.message;
@@ -354,6 +360,69 @@ async function handleNewRankFile(filePath) {
 
   updateTray();
   sendToRenderer('status-update', getStatusPayload());
+}
+
+// ── Sandbox sync ─────────────────────────────────────────────────────────────
+
+async function handleNewSandboxFile(filePath) {
+  console.log('[sandbox] arquivo detectado:', filePath);
+  if (!config.playerToken) return;
+
+  let sandboxData;
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    sandboxData = JSON.parse(content);
+  } catch (err) {
+    console.error('[sandbox] erro ao ler/parsear:', err.message);
+    return;
+  }
+
+  if (!sandboxData || sandboxData.type !== 'sandbox_config') {
+    console.warn('[sandbox] ignorado — type !== sandbox_config');
+    return;
+  }
+
+  try {
+    await postSandbox(config.playerToken, sandboxData);
+    console.log('[sandbox] enviado com sucesso');
+  } catch (err) {
+    // Sandbox é best-effort — falha silenciosa, nao afeta o rank
+    console.error('[sandbox] falha ignorada:', err.message);
+  }
+}
+
+function postSandbox(playerToken, sandboxData) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify({ player_token: playerToken, sandbox_config: sandboxData });
+    const u    = new URL(config.apiUrl + '/sync/sandbox');
+    const lib  = u.protocol === 'https:' ? https : http;
+    const req  = lib.request(
+      {
+        hostname: u.hostname,
+        port:     u.port || (u.protocol === 'https:' ? 443 : 80),
+        path:     u.pathname,
+        method:   'POST',
+        headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => (data += c));
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (res.statusCode >= 200 && res.statusCode < 300) return resolve(json);
+            const err  = new Error(json.error || ('HTTP ' + res.statusCode));
+            err.status = res.statusCode;
+            reject(err);
+          } catch { reject(new Error('Resposta invalida do servidor')); }
+        });
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(15_000, () => { req.destroy(); reject(new Error('Timeout (15s)')); });
+    req.write(body);
+    req.end();
+  });
 }
 
 function postSync(playerToken, code) {
