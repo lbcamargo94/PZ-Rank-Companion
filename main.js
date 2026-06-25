@@ -13,12 +13,18 @@ const { exec }         = require('child_process');
 const { autoUpdater }  = require('electron-updater');
 
 // ── Auto-updater config ───────────────────────────────────────────────────
-autoUpdater.autoDownload         = false; // disparo manual via downloadUpdate() no evento update-available
+autoUpdater.autoDownload         = false;
 autoUpdater.autoInstallOnAppQuit = false;
-autoUpdater.logger               = null;  // sem log verboso em produção
+autoUpdater.logger = {
+  info:  (m) => console.log('[updater]', m),
+  warn:  (m) => console.warn('[updater]', m),
+  error: (m) => console.error('[updater]', m),
+  debug: () => {},
+};
 
-// Estado atual do update (mantido em memória para o renderer buscar ao abrir a janela)
-let updateState = null; // { phase, version?, percent?, message? }
+// Estado atual do update — começa em 'checking' para o banner aparecer ao abrir a janela.
+// Em modo dev (não empacotado) começa em 'dev' para indicar que updates estão desativados.
+let updateState = null;
 
 function setUpdateState(state) {
   updateState = state;
@@ -170,11 +176,15 @@ app.whenReady().then(() => {
   setInterval(retryQueue, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
 
-  // Verificar atualizações ao iniciar (somente no build empacotado)
+  // Define estado inicial do updater para o banner aparecer imediatamente ao abrir a janela
   if (app.isPackaged) {
-    setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 4000);
-    // Re-verifica a cada 4 horas
+    setUpdateState({ phase: 'checking' });
+    setTimeout(() => autoUpdater.checkForUpdates().catch((err) => {
+      setUpdateState({ phase: 'error', message: err.message || String(err) });
+    }), 4000);
     setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60_000);
+  } else {
+    setUpdateState({ phase: 'dev' });
   }
 });
 

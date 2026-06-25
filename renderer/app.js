@@ -87,6 +87,7 @@ function renderSyncBadge(status) {
 
 function initUpdateBanner() {
   api.onUpdateStatus(renderUpdateStatus);
+
   $('btn-check-update').addEventListener('click', () => {
     $('btn-check-update').disabled = true;
     renderUpdateStatus({ phase: 'checking' });
@@ -94,7 +95,12 @@ function initUpdateBanner() {
       setTimeout(() => { $('btn-check-update').disabled = false; }, 5000);
     });
   });
+
   $('btn-install-update').addEventListener('click', () => api.installUpdate());
+
+  $('btn-dismiss-update').addEventListener('click', () => {
+    $('update-banner').hidden = true;
+  });
 }
 
 function renderUpdateStatus(data) {
@@ -120,13 +126,11 @@ function renderUpdateStatus(data) {
       break;
 
     case 'up-to-date':
-      banner.hidden      = false;
-      banner.className   = 'update-banner update-ok';
-      icon.textContent   = '✓';
-      title.textContent  = 'Aplicativo atualizado';
-      sub.textContent    = 'Você está usando a versão mais recente.';
-      // Esconde após 4s
-      setTimeout(() => { banner.hidden = true; }, 4000);
+      banner.hidden     = false;
+      banner.className  = 'update-banner update-ok';
+      icon.textContent  = '✓';
+      title.textContent = 'Aplicativo atualizado';
+      sub.textContent   = 'Você está usando a versão mais recente.';
       break;
 
     case 'available':
@@ -158,12 +162,19 @@ function renderUpdateStatus(data) {
       break;
 
     case 'error':
-      banner.hidden      = false;
-      banner.className   = 'update-banner update-error';
-      icon.textContent   = '✕';
-      title.textContent  = 'Erro ao verificar atualizações';
-      sub.textContent    = data.message || '';
-      setTimeout(() => { banner.hidden = true; }, 6000);
+      banner.hidden     = false;
+      banner.className  = 'update-banner update-error';
+      icon.textContent  = '✕';
+      title.textContent = 'Erro ao verificar atualizações';
+      sub.textContent   = data.message || '';
+      break;
+
+    case 'dev':
+      banner.hidden     = false;
+      banner.className  = 'update-banner update-checking update-dev';
+      icon.textContent  = '⚙';
+      title.textContent = 'Modo desenvolvimento';
+      sub.textContent   = 'Atualizações automáticas desativadas.';
       break;
 
     default:

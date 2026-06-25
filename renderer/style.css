@@ -93,9 +93,22 @@ body {
 }
 .update-progress-label { font-size: 11px; color: var(--subtle); white-space: nowrap; }
 
+/* Botão fechar do banner */
+.update-dismiss {
+  padding: 2px 7px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--subtle);
+  border-color: transparent;
+  opacity: .6;
+}
+.update-dismiss:hover { opacity: 1; border-color: #333; }
+
 /* Variantes de cor do banner */
-.update-checking   { border-color: #333; }
-.update-checking   .update-icon { color: var(--subtle); animation: spin 1s linear infinite; }
+.update-checking              { border-color: #333; }
+.update-checking .update-icon { color: var(--subtle); animation: spin 1s linear infinite; }
+/* Modo dev reutiliza update-checking mas sem animação */
+.update-checking.update-dev .update-icon { animation: none; }
 .update-ok         { border-color: #1a3d2b; background: #0d2018; }
 .update-ok         .update-icon { color: var(--green); }
 .update-available  { border-color: #2a3d1a; background: #141f0d; }
