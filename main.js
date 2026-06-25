@@ -369,6 +369,11 @@ async function handleNewRankFile(filePath) {
       ? `${result.character_name}  •  ${result.score ?? 0} pts`
       : 'Rank atualizado!';
     notify('✓ Rank sincronizado!', body);
+
+    // Após o rank ser gravado no DB, envia o sandbox do mesmo personagem.
+    // Necessário porque os dois arquivos são gerados quase ao mesmo tempo e
+    // o sandbox pode chegar ao backend antes da entrada existir (race condition).
+    trySendSandboxForCharacter(result.character_name).catch(() => {});
   } catch (err) {
     syncStatus = 'error';
     console.error('[sync] erro:', err.message);
@@ -389,6 +394,24 @@ async function handleNewRankFile(filePath) {
 }
 
 // ── Sandbox sync ─────────────────────────────────────────────────────────────
+
+// Replica o sanitizeName do Lua: remove chars inválidos e troca espaços por _
+function sanitizeCharName(name) {
+  if (!name) return 'Sobrevivente';
+  const s = name.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, '_');
+  return s || 'Sobrevivente';
+}
+
+// Após o rank sync ter sucesso, tenta enviar o arquivo sandbox do mesmo personagem.
+// Garante que a entrada já existe no DB quando o sandbox chega — evita a race condition
+// onde sandbox e rank são gerados ao mesmo tempo e o sandbox POST chega primeiro.
+async function trySendSandboxForCharacter(characterName) {
+  const safeName    = sanitizeCharName(characterName);
+  const sandboxPath = path.join(config.watchDir, `pz_rank_sandbox_${safeName}.json`);
+  if (!fs.existsSync(sandboxPath)) return;
+  console.log('[sandbox] enviando após rank sync:', sandboxPath);
+  await handleNewSandboxFile(sandboxPath);
+}
 
 async function handleNewSandboxFile(filePath) {
   console.log('[sandbox] arquivo detectado:', filePath);
