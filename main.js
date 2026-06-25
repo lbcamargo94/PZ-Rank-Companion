@@ -10,17 +10,11 @@ const os               = require('os');
 const https            = require('https');
 const http             = require('http');
 const { exec }         = require('child_process');
-const { autoUpdater }  = require('electron-updater');
 
-// ── Auto-updater config ───────────────────────────────────────────────────
-autoUpdater.autoDownload         = false;
-autoUpdater.autoInstallOnAppQuit = false;
-autoUpdater.logger = {
-  info:  (m) => console.log('[updater]', m),
-  warn:  (m) => console.warn('[updater]', m),
-  error: (m) => console.error('[updater]', m),
-  debug: () => {},
-};
+// electron-updater é inicializado dentro de app.whenReady() para evitar o bug
+// onde require('electron-updater') acessa require('electron').app antes do runtime
+// Electron interceptar o módulo (em dev, node_modules/electron exporta apenas o path).
+let autoUpdater = null;
 
 // Estado atual do update — começa em 'checking' para o banner aparecer ao abrir a janela.
 // Em modo dev (não empacotado) começa em 'dev' para indicar que updates estão desativados.
@@ -31,30 +25,48 @@ function setUpdateState(state) {
   sendToRenderer('update-status', state);
 }
 
-autoUpdater.on('checking-for-update', () => {
-  setUpdateState({ phase: 'checking' });
-});
-autoUpdater.on('update-available', (info) => {
-  setUpdateState({ phase: 'available', version: info.version });
-  notify('Atualização disponível!', `Versão ${info.version} pronta para download.`);
-  autoUpdater.downloadUpdate();
-});
-autoUpdater.on('update-not-available', () => {
-  setUpdateState({ phase: 'up-to-date' });
-});
-autoUpdater.on('download-progress', (p) => {
-  setUpdateState({ phase: 'downloading', percent: Math.round(p.percent) });
-});
-autoUpdater.on('update-downloaded', (info) => {
-  setUpdateState({ phase: 'downloaded', version: info.version });
-  notify('Atualização pronta!', `Versão ${info.version} baixada. Clique para instalar.`);
-  updateTray();
-});
-autoUpdater.on('error', (err) => {
-  const msg = err.message || String(err);
-  setUpdateState({ phase: 'error', message: msg });
-  console.error('[updater]', msg);
-});
+function initAutoUpdater() {
+  try {
+    autoUpdater = require('electron-updater').autoUpdater;
+  } catch (e) {
+    console.error('[updater] falha ao carregar electron-updater:', e.message);
+    return;
+  }
+
+  autoUpdater.autoDownload         = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.logger = {
+    info:  (m) => console.log('[updater]', m),
+    warn:  (m) => console.warn('[updater]', m),
+    error: (m) => console.error('[updater]', m),
+    debug: () => {},
+  };
+
+  autoUpdater.on('checking-for-update', () => {
+    setUpdateState({ phase: 'checking' });
+  });
+  autoUpdater.on('update-available', (info) => {
+    setUpdateState({ phase: 'available', version: info.version });
+    notify('Atualização disponível!', `Versão ${info.version} pronta para download.`);
+    autoUpdater.downloadUpdate();
+  });
+  autoUpdater.on('update-not-available', () => {
+    setUpdateState({ phase: 'up-to-date' });
+  });
+  autoUpdater.on('download-progress', (p) => {
+    setUpdateState({ phase: 'downloading', percent: Math.round(p.percent) });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    setUpdateState({ phase: 'downloaded', version: info.version });
+    notify('Atualização pronta!', `Versão ${info.version} baixada. Clique para instalar.`);
+    updateTray();
+  });
+  autoUpdater.on('error', (err) => {
+    const msg = err.message || String(err);
+    setUpdateState({ phase: 'error', message: msg });
+    console.error('[updater]', msg);
+  });
+}
 
 // ── Config ────────────────────────────────────────────────────────────────
 
@@ -176,13 +188,16 @@ app.whenReady().then(() => {
   setInterval(retryQueue, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
 
-  // Define estado inicial do updater para o banner aparecer imediatamente ao abrir a janela
+  // initAutoUpdater deve ser chamado aqui (pós-whenReady) para que
+  // require('electron-updater') acesse require('electron').app corretamente.
+  initAutoUpdater();
+
   if (app.isPackaged) {
     setUpdateState({ phase: 'checking' });
-    setTimeout(() => autoUpdater.checkForUpdates().catch((err) => {
+    setTimeout(() => autoUpdater && autoUpdater.checkForUpdates().catch((err) => {
       setUpdateState({ phase: 'error', message: err.message || String(err) });
     }), 4000);
-    setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60_000);
+    setInterval(() => autoUpdater && autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60_000);
   } else {
     setUpdateState({ phase: 'dev' });
   }
@@ -529,8 +544,8 @@ ipcMain.handle('open-external', (_, url) => shell.openExternal(url));
 ipcMain.handle('open-site', () => shell.openExternal(PROD_SITE_URL));
 
 ipcMain.handle('check-for-updates', async () => {
-  if (!app.isPackaged) {
-    sendToRenderer('update-status', { phase: 'up-to-date' });
+  if (!app.isPackaged || !autoUpdater) {
+    sendToRenderer('update-status', { phase: 'dev' });
     return;
   }
   try { await autoUpdater.checkForUpdates(); }
@@ -538,7 +553,7 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.handle('install-update', () => {
-  autoUpdater.quitAndInstall(false, true);
+  if (autoUpdater) autoUpdater.quitAndInstall(false, true);
 });
 
 ipcMain.handle('get-app-version',    () => app.getVersion());

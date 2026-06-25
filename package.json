@@ -1,7 +1,7 @@
-{
+﻿{
   "name": "pz-rank-companion",
-  "version": "1.3.2",
-  "description": "PZ Community Rank — Auto-sync companion",
+  "version": "1.3.3",
+  "description": "PZ Community Rank â€” Auto-sync companion",
   "main": "main.js",
   "scripts": {
     "start": "SET ELECTRON_RUN_AS_NODE=&& electron .",
@@ -62,3 +62,4 @@
     }
   }
 }
+
