@@ -111,9 +111,15 @@ let tray         = null;
 let mainWindow   = null;
 let watcher      = null;
 let lastSync     = null;    // { ts, characterName, score }
+let syncHistory  = [];      // últimos 10 syncs [ { ts, characterName, score, ok } ]
 let syncStatus   = 'idle';  // 'idle' | 'syncing' | 'ok' | 'error'
 let watcherError = null;    // null = ok, string = mensagem de erro
 let gameRunning  = false;   // true se ProjectZomboid64.exe está em execução
+
+function pushHistory(entry) {
+  syncHistory.unshift(entry);
+  if (syncHistory.length > 10) syncHistory.length = 10;
+}
 
 // ── Retry queue ───────────────────────────────────────────────────────────
 
@@ -362,8 +368,10 @@ async function handleNewRankFile(filePath) {
   try {
     const result = await postSync(config.playerToken, code);
 
-    lastSync   = { ts: Date.now(), characterName: result.character_name, score: result.score };
+    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, ok: true };
+    lastSync   = syncEntry;
     syncStatus = 'ok';
+    pushHistory(syncEntry);
 
     const body = result.character_name
       ? `${result.character_name}  •  ${result.score ?? 0} pts`
@@ -376,6 +384,7 @@ async function handleNewRankFile(filePath) {
     trySendSandboxForCharacter(result.character_name).catch(() => {});
   } catch (err) {
     syncStatus = 'error';
+    pushHistory({ ts: Date.now(), characterName: null, score: null, ok: false, error: err.message });
     console.error('[sync] erro:', err.message);
 
     if (err.status === 401 || err.status === 403) {
@@ -606,6 +615,7 @@ function getStatusPayload() {
     nick:          config.nick,
     syncStatus,
     lastSync,
+    syncHistory,
     watchDir:      config.watchDir,
     watchDirExists: fs.existsSync(config.watchDir),
     watcherError,

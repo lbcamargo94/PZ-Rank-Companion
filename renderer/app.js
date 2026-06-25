@@ -50,11 +50,10 @@ function render(status) {
   warnEl.hidden = !(status.watcherError || status.watchDirExists === false);
   if (status.watcherError) warnEl.textContent = `⚠ ${status.watcherError}`;
 
-  if (status.lastSync) {
+  const history = status.syncHistory || (status.lastSync ? [status.lastSync] : []);
+  if (history.length > 0) {
     secLastSync.hidden = false;
-    $('last-char').textContent  = status.lastSync.characterName || '—';
-    $('last-score').textContent = status.lastSync.score != null ? `${status.lastSync.score} pts` : '—';
-    $('last-time').textContent  = timeAgo(status.lastSync.ts);
+    renderSyncHistory(history);
   } else {
     secLastSync.hidden = true;
   }
@@ -250,6 +249,25 @@ $('btn-open-site').addEventListener('click', () => api.openSite());
 // ── Real-time updates ─────────────────────────────────────────────────────
 
 api.onStatusUpdate((status) => render(status));
+
+function renderSyncHistory(history) {
+  const ul = $('sync-history');
+  ul.innerHTML = '';
+  history.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'sync-item' + (item.ok === false ? ' sync-item-err' : '');
+    const icon  = item.ok === false ? '✗' : '✓';
+    const name  = item.characterName || (item.ok === false ? 'Erro' : '—');
+    const score = item.score != null ? `${item.score} pts` : '';
+    const when  = timeAgo(item.ts);
+    li.innerHTML =
+      `<span class="sync-icon">${icon}</span>` +
+      `<span class="sync-name">${name}</span>` +
+      (score ? `<span class="sync-score">${score}</span>` : '') +
+      `<span class="sync-time">${when}</span>`;
+    ul.appendChild(li);
+  });
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 

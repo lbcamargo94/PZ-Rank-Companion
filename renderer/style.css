@@ -342,5 +342,37 @@ body {
 .toggle input:checked + .slider              { background: var(--red); }
 .toggle input:checked + .slider::before     { transform: translateX(16px); background: #fff; }
 
+/* ── Sync history ───────────────────────── */
+.sync-history {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sync-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.sync-item:last-child { border-bottom: none; }
+
+.sync-icon {
+  width: 16px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green);
+  flex-shrink: 0;
+}
+.sync-item-err .sync-icon { color: var(--red); }
+
+.sync-name  { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-score { color: var(--green); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.sync-time  { color: var(--muted); font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+
 /* ── Footer ─────────────────────────────── */
 .footer { margin-top: auto; padding-top: 8px; text-align: center; }
