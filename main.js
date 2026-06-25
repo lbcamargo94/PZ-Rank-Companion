@@ -57,8 +57,9 @@ function configPath() {
 }
 
 // apiUrl: selecionada automaticamente — produção quando empacotado, local em desenvolvimento.
-const PROD_API_URL = 'https://pz-rank-backend.vercel.app';
-const DEV_API_URL  = 'http://localhost:3000';
+const PROD_API_URL  = 'https://pz-rank-backend.vercel.app';
+const DEV_API_URL   = 'http://localhost:3000';
+const PROD_SITE_URL = 'https://pz-rank.vercel.app';
 
 const DEFAULT_CONFIG = {
   nick:        '',
@@ -515,7 +516,7 @@ ipcMain.handle('disconnect', () => {
 
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url));
 
-ipcMain.handle('open-site', () => shell.openExternal(config.apiUrl));
+ipcMain.handle('open-site', () => shell.openExternal(PROD_SITE_URL));
 
 ipcMain.handle('check-for-updates', async () => {
   if (!app.isPackaged) {
