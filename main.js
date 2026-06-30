@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, Tray, Menu, Notification,
-  nativeImage, ipcMain, shell, dialog,
+  nativeImage, ipcMain, shell, dialog, safeStorage,
 } = require('electron');
 const path             = require('path');
 const fs               = require('fs');
@@ -74,6 +74,33 @@ function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
 }
 
+// Criptografa o playerToken com a API nativa do SO (DPAPI no Windows,
+// Keychain no macOS, secret store no Linux). Se não disponível, retorna
+// o valor em texto claro como fallback (mesma situação de antes da correção).
+function encryptToken(token) {
+  if (!token) return '';
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      return safeStorage.encryptString(token).toString('base64');
+    }
+  } catch (e) {
+    console.warn('[safeStorage] falha ao criptografar token:', e.message);
+  }
+  return token;
+}
+
+function decryptToken(value) {
+  if (!value) return '';
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      return safeStorage.decryptString(Buffer.from(value, 'base64'));
+    }
+  } catch {
+    // valor pode ser texto claro de versão anterior — retorna como está
+  }
+  return value;
+}
+
 // apiUrl: selecionada automaticamente — produção quando empacotado, local em desenvolvimento.
 const PROD_API_URL  = 'https://pz-rank-backend.vercel.app';
 const DEV_API_URL   = 'http://localhost:3000';
@@ -93,6 +120,12 @@ function loadConfig() {
   try {
     const saved = JSON.parse(fs.readFileSync(configPath(), 'utf-8'));
     delete saved.apiUrl; // apiUrl não é configurável pelo usuário — sempre usa o default
+    // Migração: se o token estava em texto claro (versões anteriores),
+    // descriptografa o campo novo ou mantém o plaintext como fallback.
+    if (saved.playerTokenEncrypted !== undefined) {
+      saved.playerToken = decryptToken(saved.playerTokenEncrypted);
+      delete saved.playerTokenEncrypted;
+    }
     return { ...DEFAULT_CONFIG, ...saved };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -102,7 +135,11 @@ function loadConfig() {
 function saveConfig() {
   const p = configPath();
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, JSON.stringify(config, null, 2), 'utf-8');
+  // Nunca salva o token em texto claro — usa safeStorage (criptografia do SO).
+  const toSave = { ...config };
+  toSave.playerTokenEncrypted = encryptToken(config.playerToken);
+  delete toSave.playerToken;
+  fs.writeFileSync(p, JSON.stringify(toSave, null, 2), 'utf-8');
 }
 
 // ── State ─────────────────────────────────────────────────────────────────

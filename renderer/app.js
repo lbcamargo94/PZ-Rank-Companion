@@ -260,11 +260,28 @@ function renderSyncHistory(history) {
     const name  = item.characterName || (item.ok === false ? 'Erro' : '—');
     const score = item.score != null ? `${item.score} pts` : '';
     const when  = timeAgo(item.ts);
-    li.innerHTML =
-      `<span class="sync-icon">${icon}</span>` +
-      `<span class="sync-name">${name}</span>` +
-      (score ? `<span class="sync-score">${score}</span>` : '') +
-      `<span class="sync-time">${when}</span>`;
+
+    const iconEl = document.createElement('span');
+    iconEl.className = 'sync-icon';
+    iconEl.textContent = icon;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'sync-name';
+    nameEl.textContent = name;
+
+    const timeEl = document.createElement('span');
+    timeEl.className = 'sync-time';
+    timeEl.textContent = when;
+
+    li.appendChild(iconEl);
+    li.appendChild(nameEl);
+    if (score) {
+      const scoreEl = document.createElement('span');
+      scoreEl.className = 'sync-score';
+      scoreEl.textContent = score;
+      li.appendChild(scoreEl);
+    }
+    li.appendChild(timeEl);
     ul.appendChild(li);
   });
 }
