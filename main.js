@@ -706,12 +706,26 @@ function toggleAutostart() {
 }
 
 function checkGameRunning() {
+  // Steam launch: ProjectZomboid64.exe está visível no tasklist.
+  // Bat file / modo janela: o wrapper .exe não aparece — o processo real é
+  // java.exe em <pasta do PZ>/jre64/bin/java.exe. Verificamos os dois casos.
   exec('tasklist /FI "IMAGENAME eq ProjectZomboid64.exe" /NH /FO CSV 2>NUL', (err, stdout) => {
-    const running = !err && stdout.toLowerCase().includes('projectzomboid64.exe');
-    if (running !== gameRunning) {
-      gameRunning = running;
-      updateTray();
-      sendToRenderer('status-update', getStatusPayload());
+    if (!err && stdout.toLowerCase().includes('projectzomboid64.exe')) {
+      applyGameRunning(true);
+      return;
     }
+    // Fallback: verifica java.exe cujo caminho contém "ProjectZomboid"
+    exec(
+      'powershell -NoProfile -NonInteractive -Command "if (Get-Process java -ErrorAction SilentlyContinue | Where-Object { $_.Path -like \'*ProjectZomboid*\' }) { \'found\' }"',
+      (_e, out) => applyGameRunning(out.includes('found')),
+    );
   });
+}
+
+function applyGameRunning(running) {
+  if (running !== gameRunning) {
+    gameRunning = running;
+    updateTray();
+    sendToRenderer('status-update', getStatusPayload());
+  }
 }
