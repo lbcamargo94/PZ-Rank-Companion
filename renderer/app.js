@@ -256,8 +256,9 @@ function renderSyncHistory(history) {
   history.forEach(item => {
     const li = document.createElement('li');
     li.className = 'sync-item' + (item.ok === false ? ' sync-item-err' : '');
+    if (item.ok === false && item.error) li.title = item.error;
     const icon  = item.ok === false ? '✗' : '✓';
-    const name  = item.characterName || (item.ok === false ? 'Erro' : '—');
+    const name  = item.characterName || (item.ok === false ? (item.error || 'Erro') : '—');
     const score = item.score != null ? `${item.score} pts` : '';
     const when  = timeAgo(item.ts);
 
