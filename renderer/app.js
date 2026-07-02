@@ -42,6 +42,7 @@ function render(status) {
     $('nick-label').textContent = status.nick;
     renderGameBadge(status);
     renderSyncBadge(status);
+    renderQueueBadge(status);
   }
 
   if (status.watchDir) $('input-watchdir').value = status.watchDir;
@@ -56,6 +57,19 @@ function render(status) {
     renderSyncHistory(history);
   } else {
     secLastSync.hidden = true;
+  }
+}
+
+function renderQueueBadge(status) {
+  const el = $('badge-queue');
+  if (!el) return;
+  const n = status.pendingQueue || 0;
+  if (n > 0) {
+    el.textContent = `↺ ${n} na fila`;
+    el.className   = 'badge badge-warn';
+    el.hidden      = false;
+  } else {
+    el.hidden = true;
   }
 }
 

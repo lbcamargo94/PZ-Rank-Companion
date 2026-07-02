@@ -153,12 +153,33 @@ let syncStatus   = 'idle';  // 'idle' | 'syncing' | 'ok' | 'error'
 let watcherError = null;    // null = ok, string = mensagem de erro
 let gameRunning  = false;   // true se ProjectZomboid64.exe está em execução
 
+function historyPath() {
+  return path.join(app.getPath('userData'), 'sync-history.json');
+}
+
+function loadHistory() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(historyPath(), 'utf-8'));
+    if (Array.isArray(saved)) syncHistory = saved.slice(0, 10);
+  } catch { /* primeira execução — começa vazio */ }
+  if (syncHistory.length > 0) lastSync = syncHistory.find(h => h.ok) ?? null;
+}
+
 function pushHistory(entry) {
   syncHistory.unshift(entry);
   if (syncHistory.length > 10) syncHistory.length = 10;
+  try { fs.writeFileSync(historyPath(), JSON.stringify(syncHistory, null, 2), 'utf-8'); } catch {}
 }
 
 // ── Retry queue ───────────────────────────────────────────────────────────
+
+const QUEUE_MAX_AGE     = 24 * 60 * 60 * 1000; // descarta após 24h
+const QUEUE_MAX_RETRIES = 10;                    // descarta após 10 tentativas
+const RETRY_DELAYS_MS   = [5, 10, 20, 40, 60].map(m => m * 60 * 1000); // backoff exponencial
+
+function retryDelayFor(retries) {
+  return RETRY_DELAYS_MS[Math.min(retries, RETRY_DELAYS_MS.length - 1)];
+}
 
 function queuePath() {
   return path.join(app.getPath('userData'), 'pending-syncs.json');
@@ -174,25 +195,45 @@ function saveQueue(queue) {
 
 function enqueue(code) {
   const queue = loadQueue();
-  if (queue.some(i => i.code === code)) return;  // já está na fila
-  queue.push({ code, addedAt: Date.now() });
+  if (queue.some(i => i.code === code)) return;
+  queue.push({ code, addedAt: Date.now(), retries: 0, nextRetryAt: Date.now() + retryDelayFor(0) });
   saveQueue(queue);
   console.log('[queue] adicionado:', code.slice(0, 20) + '…');
 }
 
 async function retryQueue() {
   if (!config.playerToken) return;
+  const now   = Date.now();
   const queue = loadQueue();
   if (queue.length === 0) return;
 
-  console.log(`[queue] tentando reenviar ${queue.length} item(s)`);
-  const remaining = [];
+  // Descarta itens expirados antes de tentar reenviar
+  const valid = queue.filter(i => {
+    if (now - i.addedAt > QUEUE_MAX_AGE) {
+      console.warn('[queue] expirado (>24h), descartado:', i.code.slice(0, 20) + '…');
+      return false;
+    }
+    if ((i.retries ?? 0) >= QUEUE_MAX_RETRIES) {
+      console.warn('[queue] excedeu tentativas, descartado:', i.code.slice(0, 20) + '…');
+      return false;
+    }
+    return true;
+  });
 
-  for (const item of queue) {
+  const due       = valid.filter(i => now >= (i.nextRetryAt ?? 0));
+  const notDue    = valid.filter(i => now <  (i.nextRetryAt ?? 0));
+  const remaining = [...notDue];
+
+  if (due.length === 0) return;
+  console.log(`[queue] tentando reenviar ${due.length} item(s) (${notDue.length} aguardando backoff)`);
+
+  for (const item of due) {
     try {
       const result = await postSync(config.playerToken, item.code);
-      lastSync   = { ts: Date.now(), characterName: result.character_name, score: result.score };
+      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, ok: true };
+      lastSync   = syncEntry;
       syncStatus = 'ok';
+      pushHistory(syncEntry);
       notify('✓ Sync recuperado!', result.character_name
         ? `${result.character_name}  •  ${result.score ?? 0} pts`
         : 'Rank atualizado!');
@@ -203,13 +244,17 @@ async function retryQueue() {
         config.playerToken = '';
         saveConfig();
         showMainWindow();
+        remaining.push(...due.slice(due.indexOf(item) + 1)); // preserva os restantes
         break;
       }
-      remaining.push(item);
+      const retries = (item.retries ?? 0) + 1;
+      remaining.push({ ...item, retries, nextRetryAt: Date.now() + retryDelayFor(retries) });
+      console.log(`[queue] falhou (tentativa ${retries}), próxima em ${retryDelayFor(retries) / 60000}min`);
     }
   }
 
   saveQueue(remaining);
+  sendToRenderer('status-update', getStatusPayload());
 }
 
 // ── App lifecycle ─────────────────────────────────────────────────────────
@@ -221,6 +266,7 @@ app.on('second-instance', () => mainWindow && (mainWindow.show(), mainWindow.foc
 
 app.whenReady().then(() => {
   config = loadConfig();
+  loadHistory();
   app.setAppUserModelId('com.pzrank.companion');
   createTray();
   applyAutostart();
@@ -378,10 +424,12 @@ function startWatcher() {
 
 function extractCode(filePath) {
   try {
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n');
-    // Lê o ÚLTIMO código — arquivo acumula histórico, o mais recente fica no final
-    const pzrLines = lines.map(l => l.trim()).filter(l => l.startsWith('PZRX1:') || l.startsWith('PZRX2:'));
-    return pzrLines.length > 0 ? pzrLines[pzrLines.length - 1] : null;
+    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(l => l.trim());
+    const pzrx2 = lines.filter(l => l.startsWith('PZRX2:'));
+    if (pzrx2.length > 0) return { code: pzrx2[pzrx2.length - 1], legacy: false };
+    const pzrx1 = lines.filter(l => l.startsWith('PZRX1:'));
+    if (pzrx1.length > 0) return { code: pzrx1[pzrx1.length - 1], legacy: true };
+    return null;
   } catch {
     return null;
   }
@@ -396,8 +444,14 @@ async function handleNewRankFile(filePath) {
     return;
   }
 
-  const code = extractCode(filePath);
-  if (!code) { console.warn('[sync] código PZRX2 não encontrado'); return; }
+  const extracted = extractCode(filePath);
+  if (!extracted) { console.warn('[sync] nenhum código encontrado no arquivo'); return; }
+  if (extracted.legacy) {
+    console.warn('[sync] código PZRX1 detectado — mod desatualizado');
+    notify('⚠ Mod desatualizado', 'Atualize o mod PZ Rank para sincronizar automaticamente.');
+    return;
+  }
+  const code = extracted.code;
 
   syncStatus = 'syncing';
   sendToRenderer('status-update', getStatusPayload());
@@ -648,12 +702,13 @@ ipcMain.handle('pick-folder', async () => {
 
 function getStatusPayload() {
   return {
-    connected:     !!config.playerToken,
-    nick:          config.nick,
+    connected:      !!config.playerToken,
+    nick:           config.nick,
     syncStatus,
     lastSync,
     syncHistory,
-    watchDir:      config.watchDir,
+    pendingQueue:   loadQueue().length,
+    watchDir:       config.watchDir,
     watchDirExists: fs.existsSync(config.watchDir),
     watcherError,
     gameRunning,
