@@ -12,8 +12,9 @@ const secSettings  = $('sec-settings');
 async function init() {
   const [status, cfg] = await Promise.all([api.getStatus(), api.getConfig()]);
 
-  $('input-watchdir').value  = cfg.watchDir;
-  $('chk-autostart').checked = cfg.autostart;
+  $('input-watchdir').value        = cfg.watchDir;
+  $('chk-autostart').checked       = cfg.autostart;
+  $('sel-notifications').value     = cfg.notifications || 'all';
 
   // Mostra versão no header
   try {
@@ -43,6 +44,8 @@ function render(status) {
     renderGameBadge(status);
     renderSyncBadge(status);
     renderQueueBadge(status);
+    const profileBtn = $('btn-view-profile');
+    if (profileBtn) profileBtn.hidden = !status.hasProfile;
   }
 
   if (status.watchDir) $('input-watchdir').value = status.watchDir;
@@ -255,6 +258,32 @@ $('btn-pick-folder').addEventListener('click', async () => {
 $('chk-autostart').addEventListener('change', async (e) => {
   await api.toggleAutostart(e.target.checked);
 });
+
+$('sel-notifications').addEventListener('change', async (e) => {
+  await api.saveSettings({ notifications: e.target.value });
+});
+
+// ── Sync manual ───────────────────────────────────────────────────────────
+
+$('btn-manual-sync').addEventListener('click', async () => {
+  const btn = $('btn-manual-sync');
+  const msg = $('manual-sync-msg');
+  btn.disabled    = true;
+  btn.textContent = '↺ Sincronizando...';
+  msg.hidden      = true;
+  try {
+    const result = await api.manualSync();
+    if (!result.success) {
+      msg.textContent = result.error || 'Nenhum arquivo encontrado.';
+      msg.hidden      = false;
+      setTimeout(() => { msg.hidden = true; }, 4000);
+    }
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = '↺ Sync agora'; }, 1500);
+  }
+});
+
+$('btn-view-profile').addEventListener('click', () => api.openProfile());
 
 // ── Footer ────────────────────────────────────────────────────────────────
 

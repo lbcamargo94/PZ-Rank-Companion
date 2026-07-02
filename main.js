@@ -47,7 +47,7 @@ function initAutoUpdater() {
   });
   autoUpdater.on('update-available', (info) => {
     setUpdateState({ phase: 'available', version: info.version });
-    notify('Atualização disponível!', `Versão ${info.version} pronta para download.`);
+    notify('Atualização disponível!', `Versão ${info.version} pronta para download.`, 'system');
     autoUpdater.downloadUpdate();
   });
   autoUpdater.on('update-not-available', () => {
@@ -58,7 +58,7 @@ function initAutoUpdater() {
   });
   autoUpdater.on('update-downloaded', (info) => {
     setUpdateState({ phase: 'downloaded', version: info.version });
-    notify('Atualização pronta!', `Versão ${info.version} baixada. Clique para instalar.`);
+    notify('Atualização pronta!', `Versão ${info.version} baixada. Clique para instalar.`, 'system');
     updateTray();
   });
   autoUpdater.on('error', (err) => {
@@ -107,11 +107,13 @@ const DEV_API_URL   = 'http://localhost:3000';
 const PROD_SITE_URL = 'https://pz-rank.vercel.app';
 
 const DEFAULT_CONFIG = {
-  nick:        '',
-  playerToken: '',
-  apiUrl:      app.isPackaged ? PROD_API_URL : DEV_API_URL,
-  watchDir:    path.join(os.homedir(), 'Zomboid', 'Lua', 'pz_rank'),
-  autostart:   false,
+  nick:          '',
+  playerToken:   '',
+  playerId:      '',
+  apiUrl:        app.isPackaged ? PROD_API_URL : DEV_API_URL,
+  watchDir:      path.join(os.homedir(), 'Zomboid', 'Lua', 'pz_rank'),
+  autostart:     false,
+  notifications: 'all', // 'all' | 'errors-only' | 'none'
 };
 
 let config = { ...DEFAULT_CONFIG };
@@ -236,7 +238,7 @@ async function retryQueue() {
       pushHistory(syncEntry);
       notify('✓ Sync recuperado!', result.character_name
         ? `${result.character_name}  •  ${result.score ?? 0} pts`
-        : 'Rank atualizado!');
+        : 'Rank atualizado!', 'sync-ok');
       updateTray();
       sendToRenderer('status-update', getStatusPayload());
     } catch (err) {
@@ -439,7 +441,7 @@ async function handleNewRankFile(filePath) {
   console.log('[sync] novo arquivo:', filePath);
 
   if (!config.playerToken) {
-    notify('PZ Rank', 'Arquivo detectado — configure o jogador no app.');
+    notify('PZ Rank', 'Arquivo detectado — configure o jogador no app.', 'system');
     showMainWindow();
     return;
   }
@@ -448,7 +450,7 @@ async function handleNewRankFile(filePath) {
   if (!extracted) { console.warn('[sync] nenhum código encontrado no arquivo'); return; }
   if (extracted.legacy) {
     console.warn('[sync] código PZRX1 detectado — mod desatualizado');
-    notify('⚠ Mod desatualizado', 'Atualize o mod PZ Rank para sincronizar automaticamente.');
+    notify('⚠ Mod desatualizado', 'Atualize o mod PZ Rank para sincronizar automaticamente.', 'sync-error');
     return;
   }
   const code = extracted.code;
@@ -467,7 +469,7 @@ async function handleNewRankFile(filePath) {
     const body = result.character_name
       ? `${result.character_name}  •  ${result.score ?? 0} pts`
       : 'Rank atualizado!';
-    notify('✓ Rank sincronizado!', body);
+    notify('✓ Rank sincronizado!', body, 'sync-ok');
 
     // Após o rank ser gravado no DB, envia o sandbox do mesmo personagem.
     // Necessário porque os dois arquivos são gerados quase ao mesmo tempo e
@@ -482,10 +484,10 @@ async function handleNewRankFile(filePath) {
       config.playerToken = '';
       saveConfig();
       showMainWindow();
-      notify('✗ Sessão expirada', 'Reconecte o jogador no app.');
+      notify('✗ Sessão expirada', 'Reconecte o jogador no app.', 'system');
     } else {
       enqueue(code);
-      notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.');
+      notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.', 'sync-error');
     }
   }
 
@@ -617,9 +619,10 @@ function postSync(playerToken, code) {
 ipcMain.handle('get-status', () => getStatusPayload());
 
 ipcMain.handle('get-config', () => ({
-  nick:      config.nick,
-  watchDir:  config.watchDir,
-  autostart: config.autostart,
+  nick:          config.nick,
+  watchDir:      config.watchDir,
+  autostart:     config.autostart,
+  notifications: config.notifications || 'all',
 }));
 
 ipcMain.handle('lookup-player', async (_, nick) => {
@@ -629,6 +632,7 @@ ipcMain.handle('lookup-player', async (_, nick) => {
     if (!result.player_token) throw new Error(result.error || 'Jogador não encontrado ou não aprovado');
     config.nick        = nick;
     config.playerToken = result.player_token;
+    if (result.player_id) config.playerId = result.player_id;
     saveConfig();
     updateTray();
     return { success: true };
@@ -637,8 +641,9 @@ ipcMain.handle('lookup-player', async (_, nick) => {
   }
 });
 
-ipcMain.handle('save-settings', (_, { watchDir }) => {
+ipcMain.handle('save-settings', (_, { watchDir, notifications }) => {
   if (watchDir) config.watchDir = watchDir;
+  if (notifications !== undefined) config.notifications = notifications;
   saveConfig();
   startWatcher();
   updateTray();
@@ -665,6 +670,25 @@ ipcMain.handle('disconnect', () => {
 ipcMain.handle('open-external', (_, url) => shell.openExternal(url));
 
 ipcMain.handle('open-site', () => shell.openExternal(PROD_SITE_URL));
+
+ipcMain.handle('open-profile', () => {
+  if (config.playerId) shell.openExternal(`${PROD_SITE_URL}/player/${config.playerId}`);
+});
+
+ipcMain.handle('manual-sync', async () => {
+  if (!config.playerToken) return { success: false, error: 'Jogador não conectado.' };
+  try {
+    const files = fs.readdirSync(config.watchDir)
+      .filter(f => f.endsWith('.txt'))
+      .map(f => { const fp = path.join(config.watchDir, f); return { fp, mtime: fs.statSync(fp).mtimeMs }; })
+      .sort((a, b) => b.mtime - a.mtime);
+    if (files.length === 0) return { success: false, error: 'Nenhum arquivo de rank encontrado na pasta.' };
+    await handleNewRankFile(files[0].fp);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 ipcMain.handle('check-for-updates', async () => {
   if (!app.isPackaged || !autoUpdater) {
@@ -712,6 +736,8 @@ function getStatusPayload() {
     watchDirExists: fs.existsSync(config.watchDir),
     watcherError,
     gameRunning,
+    hasProfile:     !!config.playerId,
+    notifications:  config.notifications || 'all',
   };
 }
 
@@ -737,8 +763,14 @@ function getRequest(url) {
   });
 }
 
-function notify(title, body) {
-  if (Notification.isSupported()) new Notification({ title, body }).show();
+// type: 'sync-ok' | 'sync-error' | 'system'
+// 'system' sempre mostra; 'sync-ok' bloqueado por 'errors-only'/'none'; 'sync-error' bloqueado por 'none'
+function notify(title, body, type = 'sync-ok') {
+  if (!Notification.isSupported()) return;
+  const n = config.notifications || 'all';
+  if (n === 'none'        && type !== 'system') return;
+  if (n === 'errors-only' && type !== 'sync-error' && type !== 'system') return;
+  new Notification({ title, body }).show();
 }
 
 function timeAgo(ts) {

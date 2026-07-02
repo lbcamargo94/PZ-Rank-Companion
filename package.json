@@ -1,6 +1,6 @@
 {
   "name": "pz-rank-companion",
-  "version": "1.3.6",
+  "version": "1.4.0",
   "description": "PZ Community Rank - Auto-sync companion",
   "author": "lbcamargo94",
   "main": "main.js",

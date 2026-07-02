@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('api', {
   disconnect:      ()        => ipcRenderer.invoke('disconnect'),
   openExternal:    (url)     => ipcRenderer.invoke('open-external', url),
   openSite:        ()        => ipcRenderer.invoke('open-site'),
+  openProfile:     ()        => ipcRenderer.invoke('open-profile'),
+  manualSync:      ()        => ipcRenderer.invoke('manual-sync'),
   pickFolder:      ()        => ipcRenderer.invoke('pick-folder'),
   onStatusUpdate:  (cb)      => ipcRenderer.on('status-update',  (_, data) => cb(data)),
   // Auto-update

@@ -52,6 +52,11 @@
         <span class="badge" id="badge-sync">Monitorando...</span>
         <span class="badge badge-warn" id="badge-queue" hidden></span>
       </div>
+      <div class="actions-row">
+        <button class="btn btn-ghost btn-sm" id="btn-manual-sync">↺ Sync agora</button>
+        <button class="btn btn-ghost btn-sm" id="btn-view-profile" hidden>↗ Ver perfil</button>
+      </div>
+      <p class="field-warn" id="manual-sync-msg" hidden></p>
     </section>
 
     <!-- Setup -->
@@ -89,6 +94,14 @@
           <input type="checkbox" id="chk-autostart" />
           <span class="slider"></span>
         </label>
+      </div>
+      <div class="toggle-row">
+        <span>Notificações</span>
+        <select class="sel-settings" id="sel-notifications">
+          <option value="all">Todas</option>
+          <option value="errors-only">Só erros</option>
+          <option value="none">Desativadas</option>
+        </select>
       </div>
     </section>
 
