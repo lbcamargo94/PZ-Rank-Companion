@@ -672,10 +672,11 @@ ipcMain.handle('lookup-player', async (_, nick) => {
 });
 
 ipcMain.handle('save-settings', (_, { watchDir, notifications }) => {
+  const dirChanged = watchDir && watchDir !== config.watchDir;
   if (watchDir) config.watchDir = watchDir;
   if (notifications !== undefined) config.notifications = notifications;
   saveConfig();
-  startWatcher();
+  if (dirChanged) startWatcher(); // só reinicia watcher se a pasta mudou
   updateTray();
   return { success: true };
 });
