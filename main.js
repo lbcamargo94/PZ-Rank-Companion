@@ -114,6 +114,7 @@ const DEFAULT_CONFIG = {
   watchDir:      path.join(os.homedir(), 'Zomboid', 'Lua', 'pz_rank'),
   autostart:     false,
   notifications: 'all', // 'all' | 'errors-only' | 'none'
+  savedProfiles: [], // [{ nick, playerTokenEncrypted, playerId }]
 };
 
 let config = { ...DEFAULT_CONFIG };
@@ -142,6 +143,16 @@ function saveConfig() {
   toSave.playerTokenEncrypted = encryptToken(config.playerToken);
   delete toSave.playerToken;
   fs.writeFileSync(p, JSON.stringify(toSave, null, 2), 'utf-8');
+}
+
+// Salva o perfil ativo na lista de perfis salvos (cria ou atualiza por nick).
+function saveCurrentProfileToList() {
+  if (!config.nick || !config.playerToken) return;
+  const profiles = config.savedProfiles || [];
+  const idx      = profiles.findIndex(p => p.nick.toLowerCase() === config.nick.toLowerCase());
+  const entry    = { nick: config.nick, playerTokenEncrypted: encryptToken(config.playerToken), playerId: config.playerId || '' };
+  if (idx >= 0) profiles[idx] = entry; else profiles.push(entry);
+  config.savedProfiles = profiles;
 }
 
 // ── State ─────────────────────────────────────────────────────────────────
@@ -232,7 +243,7 @@ async function retryQueue() {
   for (const item of due) {
     try {
       const result = await postSync(config.playerToken, item.code);
-      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, ok: true };
+      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true };
       lastSync   = syncEntry;
       syncStatus = 'ok';
       pushHistory(syncEntry);
@@ -274,7 +285,7 @@ app.whenReady().then(() => {
   applyAutostart();
   startWatcher();
   checkGameRunning();
-  setInterval(checkGameRunning, 30_000);
+  setInterval(checkGameRunning, 10_000);
   retryQueue();
   setInterval(retryQueue, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
@@ -328,7 +339,8 @@ function updateTray() {
     { label: gameLine,   enabled: false },
     { label: syncLine,   enabled: false },
     { type: 'separator' },
-    { label: 'Abrir', click: showMainWindow },
+    { label: 'Abrir',           click: showMainWindow },
+    { label: 'Sincronizar agora', click: triggerManualSync, enabled: !!config.playerToken },
     { type: 'separator' },
     {
       label:   'Iniciar com Windows',
@@ -424,6 +436,21 @@ function startWatcher() {
 
 // ── Sync ──────────────────────────────────────────────────────────────────
 
+async function triggerManualSync() {
+  if (!config.playerToken) return { success: false, error: 'Jogador não conectado.' };
+  try {
+    const files = fs.readdirSync(config.watchDir)
+      .filter(f => f.endsWith('.txt'))
+      .map(f => { const fp = path.join(config.watchDir, f); return { fp, mtime: fs.statSync(fp).mtimeMs }; })
+      .sort((a, b) => b.mtime - a.mtime);
+    if (files.length === 0) return { success: false, error: 'Nenhum arquivo de rank encontrado na pasta.' };
+    await handleNewRankFile(files[0].fp);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 function extractCode(filePath) {
   try {
     const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(l => l.trim());
@@ -461,7 +488,7 @@ async function handleNewRankFile(filePath) {
   try {
     const result = await postSync(config.playerToken, code);
 
-    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, ok: true };
+    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true };
     lastSync   = syncEntry;
     syncStatus = 'ok';
     pushHistory(syncEntry);
@@ -623,6 +650,7 @@ ipcMain.handle('get-config', () => ({
   watchDir:      config.watchDir,
   autostart:     config.autostart,
   notifications: config.notifications || 'all',
+  savedProfiles: (config.savedProfiles || []).map(p => ({ nick: p.nick, playerId: p.playerId || '' })),
 }));
 
 ipcMain.handle('lookup-player', async (_, nick) => {
@@ -630,9 +658,11 @@ ipcMain.handle('lookup-player', async (_, nick) => {
     const url    = `${config.apiUrl}/sync/lookup?nick=${encodeURIComponent(nick)}`;
     const result = await getRequest(url);
     if (!result.player_token) throw new Error(result.error || 'Jogador não encontrado ou não aprovado');
+    saveCurrentProfileToList(); // salva perfil atual antes de trocar
     config.nick        = nick;
     config.playerToken = result.player_token;
     if (result.player_id) config.playerId = result.player_id;
+    saveCurrentProfileToList(); // salva novo perfil na lista
     saveConfig();
     updateTray();
     return { success: true };
@@ -659,8 +689,10 @@ ipcMain.handle('toggle-autostart', (_, enabled) => {
 });
 
 ipcMain.handle('disconnect', () => {
+  saveCurrentProfileToList(); // salva antes de limpar
   config.nick        = '';
   config.playerToken = '';
+  config.playerId    = '';
   saveConfig();
   updateTray();
   sendToRenderer('status-update', getStatusPayload());
@@ -675,19 +707,36 @@ ipcMain.handle('open-profile', () => {
   if (config.playerId) shell.openExternal(`${PROD_SITE_URL}/player/${config.playerId}`);
 });
 
-ipcMain.handle('manual-sync', async () => {
-  if (!config.playerToken) return { success: false, error: 'Jogador não conectado.' };
-  try {
-    const files = fs.readdirSync(config.watchDir)
-      .filter(f => f.endsWith('.txt'))
-      .map(f => { const fp = path.join(config.watchDir, f); return { fp, mtime: fs.statSync(fp).mtimeMs }; })
-      .sort((a, b) => b.mtime - a.mtime);
-    if (files.length === 0) return { success: false, error: 'Nenhum arquivo de rank encontrado na pasta.' };
-    await handleNewRankFile(files[0].fp);
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
+ipcMain.handle('manual-sync', () => triggerManualSync());
+
+ipcMain.handle('clear-history', () => {
+  syncHistory = [];
+  lastSync    = null;
+  try { fs.writeFileSync(historyPath(), '[]', 'utf-8'); } catch {}
+  sendToRenderer('status-update', getStatusPayload());
+  return { success: true };
+});
+
+ipcMain.handle('switch-profile', (_, nick) => {
+  const profiles = config.savedProfiles || [];
+  const profile  = profiles.find(p => p.nick.toLowerCase() === nick.toLowerCase());
+  if (!profile) return { success: false, error: 'Perfil não encontrado.' };
+  saveCurrentProfileToList();
+  config.nick        = profile.nick;
+  config.playerToken = decryptToken(profile.playerTokenEncrypted);
+  config.playerId    = profile.playerId || '';
+  saveConfig();
+  updateTray();
+  sendToRenderer('status-update', getStatusPayload());
+  return { success: true };
+});
+
+ipcMain.handle('remove-profile', (_, nick) => {
+  config.savedProfiles = (config.savedProfiles || []).filter(
+    p => p.nick.toLowerCase() !== nick.toLowerCase(),
+  );
+  saveConfig();
+  return { success: true };
 });
 
 ipcMain.handle('check-for-updates', async () => {

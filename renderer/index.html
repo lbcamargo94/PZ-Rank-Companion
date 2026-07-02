@@ -63,6 +63,10 @@
     <section class="card" id="sec-setup">
       <h2>Conectar jogador</h2>
       <p class="hint">Use o nick exatamente como aparece no site do ranking.</p>
+      <div id="saved-profiles-setup" hidden>
+        <p class="hint">Perfis salvos — clique para conectar:</p>
+        <div class="profiles-list" id="profiles-list-setup"></div>
+      </div>
       <div class="field">
         <label for="input-nick">Nick do Rank</label>
         <input id="input-nick" type="text" placeholder="Ex: Ullyana" autocomplete="off" spellcheck="false" />
@@ -73,7 +77,10 @@
 
     <!-- Histórico de syncs -->
     <section class="card" id="sec-last-sync" hidden>
-      <h2>Histórico de sync</h2>
+      <div class="history-header">
+        <h2>Histórico de sync</h2>
+        <button class="btn-link dim" id="btn-clear-history" title="Limpar histórico">limpar</button>
+      </div>
       <ul class="sync-history" id="sync-history"></ul>
     </section>
 

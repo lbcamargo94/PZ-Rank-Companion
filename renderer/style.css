@@ -374,6 +374,56 @@ body {
 .sync-score { color: var(--green); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .sync-time  { color: var(--muted); font-size: 10px; white-space: nowrap; flex-shrink: 0; }
 
+/* ── History header ─────────────────────── */
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Saved profiles ─────────────────────── */
+.profiles-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.profile-chip-wrap {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.profile-chip {
+  background: #1c1c1c;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s, border-color .15s;
+}
+.profile-chip:hover { background: #252525; border-color: #555; }
+
+.profile-chip-remove {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  line-height: 1;
+  font-family: inherit;
+}
+.profile-chip-remove:hover { color: var(--red); }
+
+/* ── Sync delta e rank ───────────────────── */
+.sync-delta { color: var(--green);  font-size: 10px; flex-shrink: 0; }
+.sync-rank  { color: var(--subtle); font-size: 10px; flex-shrink: 0; }
+
 /* ── Actions row (sync manual / ver perfil) ── */
 .actions-row {
   display: flex;

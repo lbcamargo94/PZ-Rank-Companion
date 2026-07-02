@@ -16,6 +16,8 @@ async function init() {
   $('chk-autostart').checked       = cfg.autostart;
   $('sel-notifications').value     = cfg.notifications || 'all';
 
+  renderSavedProfiles(cfg);
+
   // Mostra versão no header
   try {
     const ver = await api.getAppVersion?.();
@@ -214,6 +216,7 @@ $('btn-connect').addEventListener('click', async () => {
     const [status, cfg] = await Promise.all([api.getStatus(), api.getConfig()]);
     $('input-watchdir').value = cfg.watchDir;
     render(status);
+    renderSavedProfiles(cfg);
   } else {
     showError(result.error || 'Jogador não encontrado ou não aprovado.');
   }
@@ -239,7 +242,9 @@ function showError(msg) {
 
 $('btn-disconnect').addEventListener('click', async () => {
   await api.disconnect();
-  render(await api.getStatus());
+  const [status, cfg] = await Promise.all([api.getStatus(), api.getConfig()]);
+  render(status);
+  renderSavedProfiles(cfg);
 });
 
 // ── Folder picker ─────────────────────────────────────────────────────────
@@ -262,6 +267,60 @@ $('chk-autostart').addEventListener('change', async (e) => {
 $('sel-notifications').addEventListener('change', async (e) => {
   await api.saveSettings({ notifications: e.target.value });
 });
+
+// ── Limpar histórico ──────────────────────────────────────────────────────
+
+$('btn-clear-history').addEventListener('click', async () => {
+  await api.clearHistory();
+  render(await api.getStatus());
+});
+
+// ── Perfis salvos ─────────────────────────────────────────────────────────
+
+function renderSavedProfiles(cfg) {
+  const profiles = (cfg.savedProfiles || []).filter(p => p.nick !== cfg.nick);
+  const section  = $('saved-profiles-setup');
+  const list     = $('profiles-list-setup');
+  section.hidden = profiles.length === 0;
+  list.innerHTML = '';
+  profiles.forEach(p => {
+    const wrap = document.createElement('div');
+    wrap.className = 'profile-chip-wrap';
+
+    const btn = document.createElement('button');
+    btn.className   = 'profile-chip';
+    btn.textContent = p.nick;
+    btn.addEventListener('click', async () => {
+      setConnecting(true);
+      $('connect-error').hidden = true;
+      const result = await api.switchProfile(p.nick);
+      if (result.success) {
+        const [status, cfg2] = await Promise.all([api.getStatus(), api.getConfig()]);
+        $('input-watchdir').value = cfg2.watchDir;
+        render(status);
+        renderSavedProfiles(cfg2);
+      } else {
+        showError(result.error || 'Erro ao trocar de perfil.');
+      }
+      setConnecting(false);
+    });
+
+    const rm = document.createElement('button');
+    rm.className   = 'profile-chip-remove';
+    rm.textContent = '×';
+    rm.title       = 'Remover perfil salvo';
+    rm.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await api.removeProfile(p.nick);
+      const cfg2 = await api.getConfig();
+      renderSavedProfiles(cfg2);
+    });
+
+    wrap.appendChild(btn);
+    wrap.appendChild(rm);
+    list.appendChild(wrap);
+  });
+}
 
 // ── Sync manual ───────────────────────────────────────────────────────────
 
@@ -296,35 +355,62 @@ api.onStatusUpdate((status) => render(status));
 function renderSyncHistory(history) {
   const ul = $('sync-history');
   ul.innerHTML = '';
-  history.forEach(item => {
+  history.forEach((item, i) => {
     const li = document.createElement('li');
     li.className = 'sync-item' + (item.ok === false ? ' sync-item-err' : '');
     if (item.ok === false && item.error) li.title = item.error;
-    const icon  = item.ok === false ? '✗' : '✓';
-    const name  = item.characterName || (item.ok === false ? (item.error || 'Erro') : '—');
-    const score = item.score != null ? `${item.score} pts` : '';
-    const when  = timeAgo(item.ts);
+
+    const icon = item.ok === false ? '✗' : '✓';
+    const name = item.characterName || (item.ok === false ? (item.error || 'Erro') : '—');
+    const when = timeAgo(item.ts);
+
+    // Delta de score em relação ao sync anterior bem-sucedido
+    let delta = null;
+    if (item.ok && item.score != null) {
+      for (let j = i + 1; j < history.length; j++) {
+        if (history[j].ok && history[j].score != null) {
+          delta = item.score - history[j].score;
+          break;
+        }
+      }
+    }
 
     const iconEl = document.createElement('span');
-    iconEl.className = 'sync-icon';
+    iconEl.className   = 'sync-icon';
     iconEl.textContent = icon;
 
     const nameEl = document.createElement('span');
-    nameEl.className = 'sync-name';
+    nameEl.className   = 'sync-name';
     nameEl.textContent = name;
 
     const timeEl = document.createElement('span');
-    timeEl.className = 'sync-time';
+    timeEl.className   = 'sync-time';
     timeEl.textContent = when;
 
     li.appendChild(iconEl);
     li.appendChild(nameEl);
-    if (score) {
+
+    if (item.score != null) {
       const scoreEl = document.createElement('span');
-      scoreEl.className = 'sync-score';
-      scoreEl.textContent = score;
+      scoreEl.className   = 'sync-score';
+      scoreEl.textContent = `${item.score} pts`;
       li.appendChild(scoreEl);
     }
+
+    if (delta !== null && delta > 0) {
+      const deltaEl = document.createElement('span');
+      deltaEl.className   = 'sync-delta';
+      deltaEl.textContent = `+${delta}`;
+      li.appendChild(deltaEl);
+    }
+
+    if (item.rankPosition) {
+      const rankEl = document.createElement('span');
+      rankEl.className   = 'sync-rank';
+      rankEl.textContent = `#${item.rankPosition}`;
+      li.appendChild(rankEl);
+    }
+
     li.appendChild(timeEl);
     ul.appendChild(li);
   });

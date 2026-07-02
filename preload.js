@@ -13,6 +13,9 @@ contextBridge.exposeInMainWorld('api', {
   openSite:        ()        => ipcRenderer.invoke('open-site'),
   openProfile:     ()        => ipcRenderer.invoke('open-profile'),
   manualSync:      ()        => ipcRenderer.invoke('manual-sync'),
+  clearHistory:    ()        => ipcRenderer.invoke('clear-history'),
+  switchProfile:   (nick)    => ipcRenderer.invoke('switch-profile', nick),
+  removeProfile:   (nick)    => ipcRenderer.invoke('remove-profile', nick),
   pickFolder:      ()        => ipcRenderer.invoke('pick-folder'),
   onStatusUpdate:  (cb)      => ipcRenderer.on('status-update',  (_, data) => cb(data)),
   // Auto-update
