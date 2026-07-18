@@ -206,10 +206,10 @@ function saveQueue(queue) {
   try { fs.writeFileSync(queuePath(), JSON.stringify(queue, null, 2), 'utf-8'); } catch {}
 }
 
-function enqueue(code) {
+function enqueue(code, disqualification_reason = null) {
   const queue = loadQueue();
   if (queue.some(i => i.code === code)) return;
-  queue.push({ code, addedAt: Date.now(), retries: 0, nextRetryAt: Date.now() + retryDelayFor(0) });
+  queue.push({ code, disqualification_reason, addedAt: Date.now(), retries: 0, nextRetryAt: Date.now() + retryDelayFor(0) });
   saveQueue(queue);
   console.log('[queue] adicionado:', code.slice(0, 20) + '…');
 }
@@ -242,7 +242,7 @@ async function retryQueue() {
 
   for (const item of due) {
     try {
-      const result = await postSync(config.playerToken, item.code);
+      const result = await postSync(config.playerToken, item.code, item.disqualification_reason ?? null);
       const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true };
       lastSync   = syncEntry;
       syncStatus = 'ok';
@@ -288,6 +288,8 @@ app.whenReady().then(() => {
   setInterval(checkGameRunning, 10_000);
   retryQueue();
   setInterval(retryQueue, 5 * 60_000);
+  fetchAndWriteAllowedMods();
+  setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
   if (!config.playerToken) showMainWindow();
 
   // initAutoUpdater deve ser chamado aqui (pós-whenReady) para que
@@ -418,7 +420,7 @@ function startWatcher() {
   const onFile = (filePath) => {
     const ext  = path.extname(filePath).toLowerCase();
     const base = path.basename(filePath);
-    if (ext === '.txt') {
+    if (ext === '.txt' && base !== 'pz_rank_allowed_mods.txt') {
       handleNewRankFile(filePath);
     } else if (ext === '.json' && base.startsWith('pz_rank_sandbox_')) {
       handleNewSandboxFile(filePath);
@@ -454,8 +456,27 @@ async function triggerManualSync() {
 function extractCode(filePath) {
   try {
     const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(l => l.trim());
-    const pzrx2 = lines.filter(l => l.startsWith('PZRX2:'));
-    if (pzrx2.length > 0) return { code: pzrx2[pzrx2.length - 1], legacy: false };
+
+    // Localiza o índice do último código PZRX2
+    let lastCodeIdx = -1;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      if (lines[i].startsWith('PZRX2:')) { lastCodeIdx = i; break; }
+    }
+
+    if (lastCodeIdx >= 0) {
+      // Procura a linha "Motivo    :" no mesmo bloco (entre o header anterior e o código)
+      let disqualification_reason = null;
+      for (let i = lastCodeIdx - 1; i >= 0; i--) {
+        if (lines[i].startsWith('Motivo    :')) {
+          const val = lines[i].slice('Motivo    :'.length).trim();
+          if (val) disqualification_reason = val;
+          break;
+        }
+        if (lines[i].startsWith('=== PZ Community Rank ===')) break;
+      }
+      return { code: lines[lastCodeIdx], legacy: false, disqualification_reason };
+    }
+
     const pzrx1 = lines.filter(l => l.startsWith('PZRX1:'));
     if (pzrx1.length > 0) return { code: pzrx1[pzrx1.length - 1], legacy: true };
     return null;
@@ -480,13 +501,14 @@ async function handleNewRankFile(filePath) {
     notify('⚠ Mod desatualizado', 'Atualize o mod PZ Rank para sincronizar automaticamente.', 'sync-error');
     return;
   }
-  const code = extracted.code;
+  const code                   = extracted.code;
+  const disqualification_reason = extracted.disqualification_reason ?? null;
 
   syncStatus = 'syncing';
   sendToRenderer('status-update', getStatusPayload());
 
   try {
-    const result = await postSync(config.playerToken, code);
+    const result = await postSync(config.playerToken, code, disqualification_reason);
 
     const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true };
     lastSync   = syncEntry;
@@ -513,7 +535,7 @@ async function handleNewRankFile(filePath) {
       showMainWindow();
       notify('✗ Sessão expirada', 'Reconecte o jogador no app.', 'system');
     } else {
-      enqueue(code);
+      enqueue(code, disqualification_reason);
       notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.', 'sync-error');
     }
   }
@@ -603,9 +625,37 @@ function postSandbox(playerToken, sandboxData) {
   });
 }
 
-function postSync(playerToken, code) {
+// Busca a lista de mods permitidos no backend e escreve pz_rank_allowed_mods.txt
+// na pasta watchDir para que o mod Lua possa ler via getFileReader.
+async function fetchAndWriteAllowedMods() {
+  try {
+    const url    = `${config.apiUrl}/sync/allowed-mods`;
+    const result = await getRequest(url);
+    const mods   = (result.mods ?? []).filter(m => m.mod_id);
+
+    const lines = [
+      '# PZ Community Rank - whitelist de mods permitidos',
+      `# Atualizado: ${new Date().toISOString()}`,
+      '',
+    ];
+    for (const m of mods) {
+      lines.push((m.is_required ? 'REQUIRE:' : 'ALLOW:') + m.mod_id);
+    }
+
+    const outPath = path.join(config.watchDir, 'pz_rank_allowed_mods.txt');
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, lines.join('\n') + '\n', 'utf-8');
+    console.log(`[mods] whitelist atualizada: ${mods.length} mod(s) -> ${outPath}`);
+  } catch (err) {
+    console.warn('[mods] falha ao buscar allowed-mods:', err.message);
+  }
+}
+
+function postSync(playerToken, code, disqualificationReason = null) {
   return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ player_token: playerToken, code });
+    const payload = { player_token: playerToken, code };
+    if (disqualificationReason) payload.disqualification_reason = disqualificationReason;
+    const body = JSON.stringify(payload);
     const u    = new URL(config.apiUrl + '/sync/update');
     const lib  = u.protocol === 'https:' ? https : http;
 
