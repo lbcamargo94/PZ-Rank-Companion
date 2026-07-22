@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   openSite:        ()        => ipcRenderer.invoke('open-site'),
   openProfile:     ()        => ipcRenderer.invoke('open-profile'),
   manualSync:      ()        => ipcRenderer.invoke('manual-sync'),
+  clearViolation:  ()        => ipcRenderer.invoke('clear-violation'),
   clearHistory:    ()        => ipcRenderer.invoke('clear-history'),
   switchProfile:   (nick)    => ipcRenderer.invoke('switch-profile', nick),
   removeProfile:   (nick)    => ipcRenderer.invoke('remove-profile', nick),

@@ -373,6 +373,9 @@ body {
 .sync-name  { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sync-score { color: var(--green); font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .sync-time  { color: var(--muted); font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+.btn-clear-violation { font-size: 10px; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--red); color: var(--red); background: transparent; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.btn-clear-violation:hover:not(:disabled) { background: var(--red); color: #fff; }
+.btn-clear-violation:disabled { opacity: 0.6; cursor: default; }
 
 /* ── History header ─────────────────────── */
 .history-header {

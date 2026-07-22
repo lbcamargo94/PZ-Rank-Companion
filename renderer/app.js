@@ -412,6 +412,21 @@ function renderSyncHistory(history) {
     }
 
     li.appendChild(timeEl);
+
+    if (item.ok && item.disqualificationReason) {
+      const clearBtn = document.createElement('button');
+      clearBtn.className   = 'btn-clear-violation';
+      clearBtn.title       = 'Escreve sinal para o mod limpar as flags de violação no próximo carregamento do save';
+      clearBtn.textContent = 'Limpar violação';
+      clearBtn.addEventListener('click', async () => {
+        clearBtn.disabled = true;
+        const result = await api.clearViolation();
+        clearBtn.textContent = result.success ? 'Sinal enviado ✓' : 'Erro';
+        if (!result.success) clearBtn.disabled = false;
+      });
+      li.appendChild(clearBtn);
+    }
+
     ul.appendChild(li);
   });
 }

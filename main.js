@@ -243,7 +243,7 @@ async function retryQueue() {
   for (const item of due) {
     try {
       const result = await postSync(config.playerToken, item.code, item.disqualification_reason ?? null);
-      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true };
+      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: item.disqualification_reason ?? null };
       lastSync   = syncEntry;
       syncStatus = 'ok';
       pushHistory(syncEntry);
@@ -510,7 +510,7 @@ async function handleNewRankFile(filePath) {
   try {
     const result = await postSync(config.playerToken, code, disqualification_reason);
 
-    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true };
+    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: disqualification_reason ?? null };
     lastSync   = syncEntry;
     syncStatus = 'ok';
     pushHistory(syncEntry);
@@ -651,6 +651,13 @@ async function fetchAndWriteAllowedMods() {
   }
 }
 
+function writeClearViolation() {
+  const outPath = path.join(config.watchDir, 'pz_rank_clear_violation.txt');
+  fs.mkdirSync(path.dirname(outPath), { recursive: true });
+  fs.writeFileSync(outPath, 'clear', 'utf-8');
+  console.log('[violation] arquivo de limpeza escrito:', outPath);
+}
+
 function postSync(playerToken, code, disqualificationReason = null) {
   return new Promise((resolve, reject) => {
     const payload = { player_token: playerToken, code };
@@ -759,6 +766,15 @@ ipcMain.handle('open-profile', () => {
 });
 
 ipcMain.handle('manual-sync', () => triggerManualSync());
+
+ipcMain.handle('clear-violation', () => {
+  try {
+    writeClearViolation();
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 ipcMain.handle('clear-history', () => {
   syncHistory = [];
