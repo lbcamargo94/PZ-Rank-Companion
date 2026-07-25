@@ -157,14 +157,15 @@ function saveCurrentProfileToList() {
 
 // ── State ─────────────────────────────────────────────────────────────────
 
-let tray         = null;
-let mainWindow   = null;
-let watcher      = null;
-let lastSync     = null;    // { ts, characterName, score }
-let syncHistory  = [];      // últimos 10 syncs [ { ts, characterName, score, ok } ]
-let syncStatus   = 'idle';  // 'idle' | 'syncing' | 'ok' | 'error'
-let watcherError = null;    // null = ok, string = mensagem de erro
-let gameRunning  = false;   // true se ProjectZomboid64.exe está em execução
+let tray            = null;
+let mainWindow      = null;
+let watcher         = null;
+let lastSync        = null;    // { ts, characterName, score }
+let syncHistory     = [];      // últimos 10 syncs [ { ts, characterName, score, ok } ]
+let syncStatus      = 'idle';  // 'idle' | 'syncing' | 'ok' | 'error'
+let watcherError    = null;    // null = ok, string = mensagem de erro
+let gameRunning     = false;   // true se ProjectZomboid64.exe está em execução
+let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
 
 function historyPath() {
   return path.join(app.getPath('userData'), 'sync-history.json');
@@ -290,6 +291,10 @@ app.whenReady().then(() => {
   setInterval(retryQueue, 5 * 60_000);
   fetchAndWriteAllowedMods();
   setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
+
+  // Heartbeat de detecção de mod removido: a cada 5min verifica se o jogo está
+  // rodando mas nenhum arquivo PZR foi gerado nos últimos 10min → mod removido.
+  setInterval(checkModHeartbeat, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
 
   // initAutoUpdater deve ser chamado aqui (pós-whenReady) para que
@@ -421,6 +426,7 @@ function startWatcher() {
     const ext  = path.extname(filePath).toLowerCase();
     const base = path.basename(filePath);
     if (ext === '.txt' && base !== 'pz_rank_allowed_mods.txt') {
+      lastRankFileTime = Date.now();
       handleNewRankFile(filePath);
     } else if (ext === '.json' && base.startsWith('pz_rank_sandbox_')) {
       handleNewSandboxFile(filePath);
@@ -625,6 +631,26 @@ function postSandbox(playerToken, sandboxData) {
   });
 }
 
+// Detecta se o mod foi removido: jogo rodando há 10min+ sem gerar arquivos PZR.
+// Envia sinal ao backend para desclassificar a run ativa do jogador.
+async function checkModHeartbeat() {
+  if (!config.playerToken || !gameRunning) return;
+  if (!lastRankFileTime) return; // nunca viu arquivo — pode ser primeira execução
+  const silentMs = Date.now() - lastRankFileTime;
+  if (silentMs < 10 * 60_000) return; // menos de 10min sem arquivo — ainda ok
+
+  try {
+    await postRequest(`${config.apiUrl}/sync/heartbeat`, {
+      player_token:    config.playerToken,
+      no_mod_detected: true,
+    });
+    console.log('[heartbeat] Mod removido detectado — run desclassificada pelo backend.');
+    sendToRenderer('status-update', getStatusPayload());
+  } catch (err) {
+    console.error('[heartbeat] Falha ao enviar sinal de mod removido:', err.message);
+  }
+}
+
 // Busca a lista de mods permitidos no backend e escreve pz_rank_allowed_mods.txt
 // na pasta watchDir para que o mod Lua possa ler via getFileReader.
 async function fetchAndWriteAllowedMods() {
@@ -715,14 +741,31 @@ ipcMain.handle('lookup-player', async (_, nick) => {
     const url    = `${config.apiUrl}/sync/lookup?nick=${encodeURIComponent(nick)}`;
     const result = await getRequest(url);
     if (!result.player_token) throw new Error(result.error || 'Jogador não encontrado ou não aprovado');
-    saveCurrentProfileToList(); // salva perfil atual antes de trocar
+    saveCurrentProfileToList();
     config.nick        = nick;
     config.playerToken = result.player_token;
     if (result.player_id) config.playerId = result.player_id;
-    saveCurrentProfileToList(); // salva novo perfil na lista
+    saveCurrentProfileToList();
     saveConfig();
     updateTray();
     return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('login-player', async (_, { email, password }) => {
+  try {
+    const result = await postRequest(`${config.apiUrl}/auth/player/login`, { email, password });
+    if (!result.player_token) throw new Error(result.error || 'Credenciais inválidas.');
+    saveCurrentProfileToList();
+    config.nick        = result.nick || email;
+    config.playerToken = result.player_token;
+    config.playerId    = result.player_id || '';
+    saveCurrentProfileToList();
+    saveConfig();
+    updateTray();
+    return { success: true, nick: result.nick };
   } catch (err) {
     return { success: false, error: err.message };
   }

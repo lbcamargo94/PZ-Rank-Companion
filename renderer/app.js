@@ -202,34 +202,54 @@ function renderUpdateStatus(data) {
 
 // ── Conectar ──────────────────────────────────────────────────────────────
 
+// Toggle mostrar/ocultar senha
+$('btn-toggle-pass').addEventListener('click', () => {
+  const inp = $('input-password');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+});
+
 $('btn-connect').addEventListener('click', async () => {
-  const nick = $('input-nick').value.trim();
+  const email    = $('input-email').value.trim();
+  const password = $('input-password').value;
 
   $('connect-error').hidden = true;
-  if (!nick) { showError('Digite seu nick do ranking.'); return; }
+  if (!email)    { showError('Digite seu email.'); return; }
+  if (!password) { showError('Digite sua senha.'); return; }
 
   setConnecting(true);
 
-  const result = await api.lookupPlayer(nick);
+  const result = await api.loginPlayer(email, password);
 
   if (result.success) {
     const [status, cfg] = await Promise.all([api.getStatus(), api.getConfig()]);
     $('input-watchdir').value = cfg.watchDir;
+    $('input-password').value = '';
     render(status);
     renderSavedProfiles(cfg);
   } else {
-    showError(result.error || 'Jogador não encontrado ou não aprovado.');
+    showError(result.error || 'Email ou senha incorretos.');
   }
 
   setConnecting(false);
 });
 
-$('input-nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-connect').click(); });
+$('input-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btn-connect').click(); });
+$('input-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('input-password').focus(); });
+
+// Links de esqueci senha e cadastro — abre o site
+$('link-forgot-password').addEventListener('click', (e) => {
+  e.preventDefault();
+  api.openExternal?.(`${window._siteUrl ?? 'https://pz-rank.vercel.app'}/redefinir-senha`);
+});
+$('link-register').addEventListener('click', (e) => {
+  e.preventDefault();
+  api.openExternal?.(`${window._siteUrl ?? 'https://pz-rank.vercel.app'}`);
+});
 
 function setConnecting(loading) {
   const btn = $('btn-connect');
   btn.disabled    = loading;
-  btn.textContent = loading ? 'Conectando...' : 'Conectar';
+  btn.textContent = loading ? 'Entrando...' : 'Entrar';
 }
 
 function showError(msg) {

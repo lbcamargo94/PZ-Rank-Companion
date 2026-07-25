@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   getStatus:       ()        => ipcRenderer.invoke('get-status'),
   getConfig:       ()        => ipcRenderer.invoke('get-config'),
   lookupPlayer:    (nick)    => ipcRenderer.invoke('lookup-player', nick),
+  loginPlayer:     (email, password) => ipcRenderer.invoke('login-player', { email, password }),
   saveSettings:    (s)       => ipcRenderer.invoke('save-settings', s),
   toggleAutostart: (enabled) => ipcRenderer.invoke('toggle-autostart', enabled),
   disconnect:      ()        => ipcRenderer.invoke('disconnect'),
