@@ -922,6 +922,35 @@ function getRequest(url) {
   });
 }
 
+function postRequest(url, body) {
+  return new Promise((resolve, reject) => {
+    const u       = new URL(url);
+    const lib     = u.protocol === 'https:' ? https : http;
+    const payload = JSON.stringify(body);
+    const options = {
+      hostname: u.hostname,
+      path:     u.pathname + u.search,
+      port:     u.port || (u.protocol === 'https:' ? 443 : 80),
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+    };
+    const req = lib.request(options, (res) => {
+      let data = '';
+      res.on('data', (c) => (data += c));
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          if (res.statusCode >= 200 && res.statusCode < 300) resolve(json);
+          else { const e = new Error(json.error || `HTTP ${res.statusCode}`); e.status = res.statusCode; reject(e); }
+        } catch { reject(new Error('Resposta inválida')); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 // type: 'sync-ok' | 'sync-error' | 'system'
 // 'system' sempre mostra; 'sync-ok' bloqueado por 'errors-only'/'none'; 'sync-error' bloqueado por 'none'
 function notify(title, body, type = 'sync-ok') {
