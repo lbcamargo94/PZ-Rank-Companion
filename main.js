@@ -305,7 +305,10 @@ app.whenReady().then(() => {
   setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
 
   // Heartbeat de detecção de mod removido: a cada 5min verifica se o jogo está
-  // rodando mas nenhum arquivo PZR foi gerado nos últimos 10min → mod removido.
+  // rodando mas nenhum arquivo PZR foi gerado nos últimos 30min → mod removido.
+  // Threshold de 30min cobre: jogo pausado, jogador explorando sem kills/levelups,
+  // ou salvamento automático sem mudança de estado (deduplicação do mod v2.3.9).
+  // Mods v2.5.0+ incluem timestamp no código e sempre geram arquivo a cada 5min.
   setInterval(checkModHeartbeat, 5 * 60_000);
   if (!config.playerToken) showMainWindow();
 
@@ -654,13 +657,13 @@ function postSandbox(playerToken, sandboxData) {
   });
 }
 
-// Detecta se o mod foi removido: jogo rodando há 10min+ sem gerar arquivos PZR.
+// Detecta se o mod foi removido: jogo rodando há 30min+ sem gerar arquivos PZR.
 // Envia sinal ao backend para desclassificar a run ativa do jogador.
 async function checkModHeartbeat() {
   if (!config.playerToken || !gameRunning) return;
   if (!lastRankFileTime) return; // nunca viu arquivo — pode ser primeira execução
   const silentMs = Date.now() - lastRankFileTime;
-  if (silentMs < 10 * 60_000) return; // menos de 10min sem arquivo — ainda ok
+  if (silentMs < 30 * 60_000) return; // menos de 30min sem arquivo — ainda ok
 
   try {
     await postRequest(`${config.apiUrl}/sync/heartbeat`, {
