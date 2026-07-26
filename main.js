@@ -9,7 +9,19 @@ const fs               = require('fs');
 const os               = require('os');
 const https            = require('https');
 const http             = require('http');
+const crypto           = require('crypto');
 const { exec }         = require('child_process');
+
+// Chave HMAC para assinatura dos syncs — deve coincidir com SYNC_HMAC_SECRET no backend.
+// Dividida em partes para dificultar extração direta do binário.
+const _hs = ['5ae8c084ea5f', 'b4e5cc1c71c8', '7ddd55eab075', '0120052ffbdb', '13abf950a045', '15e1'];
+const SYNC_HMAC_SECRET = _hs.join('');
+
+function signCode(playerToken, code) {
+  return crypto.createHmac('sha256', SYNC_HMAC_SECRET)
+    .update(`${playerToken}:${code}`)
+    .digest('hex');
+}
 
 // electron-updater é inicializado dentro de app.whenReady() para evitar o bug
 // onde require('electron-updater') acessa require('electron').app antes do runtime
@@ -427,7 +439,17 @@ function startWatcher() {
     const base = path.basename(filePath);
     if (ext === '.txt' && base !== 'pz_rank_allowed_mods.txt') {
       lastRankFileTime = Date.now();
-      handleNewRankFile(filePath);
+      // Captura o conteúdo imediatamente (síncrono) antes de qualquer operação async.
+      // Isso fecha a janela onde um jogador poderia deletar o arquivo entre o evento
+      // do watcher e a leitura efetiva, perdendo dados de violação.
+      let content;
+      try {
+        content = fs.readFileSync(filePath, 'utf-8');
+      } catch {
+        console.warn('[sync] arquivo desapareceu antes da leitura:', filePath);
+        return;
+      }
+      handleNewRankFileContent(content, filePath);
     } else if (ext === '.json' && base.startsWith('pz_rank_sandbox_')) {
       handleNewSandboxFile(filePath);
     }
@@ -448,20 +470,21 @@ async function triggerManualSync() {
   if (!config.playerToken) return { success: false, error: 'Jogador não conectado.' };
   try {
     const files = fs.readdirSync(config.watchDir)
-      .filter(f => f.endsWith('.txt'))
+      .filter(f => f.endsWith('.txt') && f !== 'pz_rank_allowed_mods.txt')
       .map(f => { const fp = path.join(config.watchDir, f); return { fp, mtime: fs.statSync(fp).mtimeMs }; })
       .sort((a, b) => b.mtime - a.mtime);
     if (files.length === 0) return { success: false, error: 'Nenhum arquivo de rank encontrado na pasta.' };
-    await handleNewRankFile(files[0].fp);
+    const content = fs.readFileSync(files[0].fp, 'utf-8');
+    await handleNewRankFileContent(content, files[0].fp);
     return { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
 }
 
-function extractCode(filePath) {
+function extractCodeFromContent(content) {
   try {
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').map(l => l.trim());
+    const lines = content.split('\n').map(l => l.trim());
 
     // Localiza o índice do último código PZRX2
     let lastCodeIdx = -1;
@@ -491,8 +514,8 @@ function extractCode(filePath) {
   }
 }
 
-async function handleNewRankFile(filePath) {
-  console.log('[sync] novo arquivo:', filePath);
+async function handleNewRankFileContent(content, filePath) {
+  console.log('[sync] processando arquivo:', filePath);
 
   if (!config.playerToken) {
     notify('PZ Rank', 'Arquivo detectado — configure o jogador no app.', 'system');
@@ -500,7 +523,7 @@ async function handleNewRankFile(filePath) {
     return;
   }
 
-  const extracted = extractCode(filePath);
+  const extracted = extractCodeFromContent(content);
   if (!extracted) { console.warn('[sync] nenhum código encontrado no arquivo'); return; }
   if (extracted.legacy) {
     console.warn('[sync] código PZRX1 detectado — mod desatualizado');
@@ -698,7 +721,11 @@ function postSync(playerToken, code, disqualificationReason = null) {
         port:     u.port || (u.protocol === 'https:' ? 443 : 80),
         path:     u.pathname,
         method:   'POST',
-        headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        headers:  {
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'X-Code-Sig':     signCode(playerToken, code),
+        },
       },
       (res) => {
         let data = '';
