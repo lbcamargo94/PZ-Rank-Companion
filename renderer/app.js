@@ -258,11 +258,11 @@ $('input-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('
 // Links de esqueci senha e cadastro — abre o site
 $('link-forgot-password').addEventListener('click', (e) => {
   e.preventDefault();
-  api.openExternal?.(`${window._siteUrl ?? 'https://pz-rank.vercel.app'}/redefinir-senha`);
+  api.openExternal?.(`${window._siteUrl ?? 'https://pzrank.com.br'}/redefinir-senha`);
 });
 $('link-register').addEventListener('click', (e) => {
   e.preventDefault();
-  api.openExternal?.(`${window._siteUrl ?? 'https://pz-rank.vercel.app'}`);
+  api.openExternal?.(`${window._siteUrl ?? 'https://pzrank.com.br'}`);
 });
 
 function setConnecting(loading) {
