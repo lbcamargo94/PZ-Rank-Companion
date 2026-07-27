@@ -298,7 +298,7 @@ app.whenReady().then(() => {
   applyAutostart();
   startWatcher();
   checkGameRunning();
-  setInterval(checkGameRunning, 10_000);
+  setInterval(checkGameRunning, 30_000);
   retryQueue();
   setInterval(retryQueue, 5 * 60_000);
   fetchAndWriteAllowedMods();
@@ -395,9 +395,10 @@ function showMainWindow() {
     title:          'PZ Rank Companion',
     icon:           path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
-      preload:          path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration:  false,
+      preload:             path.join(__dirname, 'preload.js'),
+      contextIsolation:    true,
+      nodeIntegration:     false,
+      backgroundThrottling: true,
     },
   });
 
@@ -1030,6 +1031,11 @@ function checkGameRunning() {
 function applyGameRunning(running) {
   if (running !== gameRunning) {
     gameRunning = running;
+    // Modo jogo: enquanto PZ está rodando, reduz o Chromium para 1fps.
+    // Elimina a disputa de CPU entre o renderer do Electron e o jogo.
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.setFrameRate(running ? 1 : 60);
+    }
     updateTray();
     sendToRenderer('status-update', getStatusPayload());
   }
