@@ -50,6 +50,8 @@ function render(status) {
     if (profileBtn) profileBtn.hidden = !status.hasProfile;
   }
 
+  renderModOutdatedBanner(status);
+
   if (status.watchDir) $('input-watchdir').value = status.watchDir;
 
   const warnEl = $('watchdir-warn');
@@ -100,6 +102,23 @@ function renderSyncBadge(status) {
     el.className   = status.syncStatus === 'ok' ? 'badge badge-green' : 'badge badge-muted';
   }
 }
+
+// ── Mod outdated banner ───────────────────────────────────────────────────
+
+function renderModOutdatedBanner(status) {
+  const banner = $('mod-outdated-banner');
+  if (!banner) return;
+  if (status.modOutdated) banner.hidden = false;
+  else banner.hidden = true;
+}
+
+$('btn-open-workshop').addEventListener('click', () => {
+  api.openExternal?.('https://steamcommunity.com/sharedfiles/filedetails/?id=3746228308');
+});
+
+$('btn-dismiss-mod-outdated').addEventListener('click', () => {
+  $('mod-outdated-banner').hidden = true;
+});
 
 // ── Update banner ─────────────────────────────────────────────────────────
 

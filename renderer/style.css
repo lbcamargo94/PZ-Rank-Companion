@@ -119,6 +119,8 @@ body {
 .update-ready      .update-icon { color: var(--orange); }
 .update-error      { border-color: #3d1a1a; background: #200d0d; }
 .update-error      .update-icon { color: var(--red); }
+.mod-outdated      { border-color: #3d2e00; background: #1f1700; }
+.mod-outdated      .update-icon { color: var(--orange); }
 
 .btn-update {
   background: var(--orange);

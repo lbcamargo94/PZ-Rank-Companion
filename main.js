@@ -178,6 +178,7 @@ let syncStatus      = 'idle';  // 'idle' | 'syncing' | 'ok' | 'error'
 let watcherError    = null;    // null = ok, string = mensagem de erro
 let gameRunning     = false;   // true se ProjectZomboid64.exe está em execução
 let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
+let modOutdated      = false;  // true quando backend retorna 426 (mod desatualizado)
 
 function historyPath() {
   return path.join(app.getPath('userData'), 'sync-history.json');
@@ -259,6 +260,7 @@ async function retryQueue() {
       const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: item.disqualification_reason ?? null };
       lastSync   = syncEntry;
       syncStatus = 'ok';
+      if (modOutdated) modOutdated = false;
       pushHistory(syncEntry);
       notify('✓ Sync recuperado!', result.character_name
         ? `${result.character_name}  •  ${result.score ?? 0} pts`
@@ -272,6 +274,11 @@ async function retryQueue() {
         showMainWindow();
         remaining.push(...due.slice(due.indexOf(item) + 1)); // preserva os restantes
         break;
+      }
+      if (err.status === 426) {
+        modOutdated = true;
+        notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam.', 'system');
+        break; // não adianta tentar os outros itens da fila — todos falharão
       }
       const retries = (item.retries ?? 0) + 1;
       remaining.push({ ...item, retries, nextRetryAt: Date.now() + retryDelayFor(retries) });
@@ -546,6 +553,7 @@ async function handleNewRankFileContent(content, filePath) {
     const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: disqualification_reason ?? null };
     lastSync   = syncEntry;
     syncStatus = 'ok';
+    if (modOutdated) modOutdated = false;
     pushHistory(syncEntry);
 
     const body = result.character_name
@@ -567,6 +575,9 @@ async function handleNewRankFileContent(content, filePath) {
       saveConfig();
       showMainWindow();
       notify('✗ Sessão expirada', 'Reconecte o jogador no app.', 'system');
+    } else if (err.status === 426) {
+      modOutdated = true;
+      notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam para continuar sincronizando.', 'system');
     } else {
       enqueue(code, disqualification_reason);
       notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.', 'sync-error');
@@ -928,6 +939,7 @@ function getStatusPayload() {
     gameRunning,
     hasProfile:     !!config.playerId,
     notifications:  config.notifications || 'all',
+    modOutdated,
   };
 }
 
