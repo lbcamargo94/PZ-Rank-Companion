@@ -671,11 +671,15 @@ function postSandbox(playerToken, sandboxData) {
 
 // Detecta se o mod foi removido: jogo rodando há 30min+ sem gerar arquivos PZR.
 // Envia sinal ao backend para desclassificar a run ativa do jogador.
+// Após disparar, limpa lastRankFileTime para exigir novo arquivo antes de disparar de novo.
 async function checkModHeartbeat() {
   if (!config.playerToken || !gameRunning) return;
   if (!lastRankFileTime) return; // nunca viu arquivo — pode ser primeira execução
   const silentMs = Date.now() - lastRankFileTime;
   if (silentMs < 30 * 60_000) return; // menos de 30min sem arquivo — ainda ok
+
+  // Limpa para não disparar novamente até que o mod gere um novo arquivo
+  lastRankFileTime = null;
 
   try {
     await postRequest(`${config.apiUrl}/sync/heartbeat`, {
