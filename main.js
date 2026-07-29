@@ -497,10 +497,10 @@ function extractCodeFromContent(content) {
   try {
     const lines = content.split('\n').map(l => l.trim());
 
-    // Localiza o índice do último código PZRX2
+    // Localiza o índice do último código PZRX2 ou PZRX3
     let lastCodeIdx = -1;
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].startsWith('PZRX2:')) { lastCodeIdx = i; break; }
+      if (lines[i].startsWith('PZRX2:') || lines[i].startsWith('PZRX3:')) { lastCodeIdx = i; break; }
     }
 
     if (lastCodeIdx >= 0) {
@@ -543,12 +543,14 @@ async function handleNewRankFileContent(content, filePath) {
   }
   const code                   = extracted.code;
   const disqualification_reason = extracted.disqualification_reason ?? null;
+  const charName               = charNameFromFilePath(filePath);
+  const heatmap_delta          = readHeatmapDelta(charName);
 
   syncStatus = 'syncing';
   sendToRenderer('status-update', getStatusPayload());
 
   try {
-    const result = await postSync(config.playerToken, code, disqualification_reason);
+    const result = await postSync(config.playerToken, code, disqualification_reason, heatmap_delta);
 
     const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: disqualification_reason ?? null };
     lastSync   = syncEntry;
@@ -726,10 +728,29 @@ function writeClearViolation() {
   console.log('[violation] arquivo de limpeza escrito:', outPath);
 }
 
-function postSync(playerToken, code, disqualificationReason = null) {
+// Deriva o nome sanitizado do personagem a partir do caminho do arquivo .txt.
+// ex: pz_rank_Liana.txt → "Liana"
+function charNameFromFilePath(filePath) {
+  const base = path.basename(filePath, '.txt');
+  return base.startsWith('pz_rank_') ? base.slice('pz_rank_'.length) : null;
+}
+
+// Tenta ler o arquivo de heatmap delta correspondente ao personagem.
+// Retorna array de pontos ou null se ausente/inválido.
+function readHeatmapDelta(charName) {
+  if (!charName) return null;
+  const heatmapPath = path.join(config.watchDir, `pz_rank_heatmap_${charName}.json`);
+  try {
+    const data = JSON.parse(fs.readFileSync(heatmapPath, 'utf-8'));
+    return Array.isArray(data) && data.length > 0 ? data : null;
+  } catch { return null; }
+}
+
+function postSync(playerToken, code, disqualificationReason = null, heatmapDelta = null) {
   return new Promise((resolve, reject) => {
     const payload = { player_token: playerToken, code };
     if (disqualificationReason) payload.disqualification_reason = disqualificationReason;
+    if (heatmapDelta && heatmapDelta.length > 0) payload.heatmap_delta = heatmapDelta;
     const body = JSON.stringify(payload);
     const u    = new URL(config.apiUrl + '/sync/update');
     const lib  = u.protocol === 'https:' ? https : http;
