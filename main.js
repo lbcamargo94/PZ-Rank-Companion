@@ -461,7 +461,7 @@ function startWatcher() {
         return;
       }
       handleNewRankFileContent(content, filePath);
-    } else if (ext === '.json' && base.startsWith('pz_rank_sandbox_')) {
+    } else if (ext === '.log' && base.startsWith('pz_rank_sandbox_')) {
       handleNewSandboxFile(filePath);
     }
   };
@@ -604,7 +604,7 @@ function sanitizeCharName(name) {
 // onde sandbox e rank são gerados ao mesmo tempo e o sandbox POST chega primeiro.
 async function trySendSandboxForCharacter(characterName) {
   const safeName    = sanitizeCharName(characterName);
-  const sandboxPath = path.join(config.watchDir, `pz_rank_sandbox_${safeName}.json`);
+  const sandboxPath = path.join(config.watchDir, `pz_rank_sandbox_${safeName}.log`);
   if (!fs.existsSync(sandboxPath)) return;
   console.log('[sandbox] enviando após rank sync:', sandboxPath);
   await handleNewSandboxFile(sandboxPath);
@@ -739,7 +739,7 @@ function charNameFromFilePath(filePath) {
 // Retorna array de pontos ou null se ausente/inválido.
 function readHeatmapDelta(charName) {
   if (!charName) return null;
-  const heatmapPath = path.join(config.watchDir, `pz_rank_heatmap_${charName}.json`);
+  const heatmapPath = path.join(config.watchDir, `pz_rank_heatmap_${charName}.log`);
   try {
     const data = JSON.parse(fs.readFileSync(heatmapPath, 'utf-8'));
     return Array.isArray(data) && data.length > 0 ? data : null;
