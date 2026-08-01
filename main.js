@@ -500,10 +500,10 @@ function extractCodeFromContent(content) {
   try {
     const lines = content.split('\n').map(l => l.trim());
 
-    // Localiza o índice do último código PZRX2 ou PZRX3
+    // Localiza o índice do último código PZRX (qualquer versão não-legacy: PZRX2..PZRX5+)
     let lastCodeIdx = -1;
     for (let i = lines.length - 1; i >= 0; i--) {
-      if (lines[i].startsWith('PZRX2:') || lines[i].startsWith('PZRX3:')) { lastCodeIdx = i; break; }
+      if (/^PZRX[2-9]:/.test(lines[i])) { lastCodeIdx = i; break; }
     }
 
     if (lastCodeIdx >= 0) {
