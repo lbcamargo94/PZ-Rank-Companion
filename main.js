@@ -261,6 +261,9 @@ async function retryQueue() {
       lastSync   = syncEntry;
       syncStatus = 'ok';
       if (modOutdated) modOutdated = false;
+      // Reseta o relógio do heartbeat: o sync confirma que o mod está ativo,
+      // evitando que o heartbeat dispare logo após um retry bem-sucedido da fila.
+      lastRankFileTime = Date.now();
       pushHistory(syncEntry);
       notify('✓ Sync recuperado!', result.character_name
         ? `${result.character_name}  •  ${result.score ?? 0} pts`
