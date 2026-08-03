@@ -68,15 +68,15 @@ function render(status) {
 }
 
 function renderQueueBadge(status) {
-  const el = $('badge-queue');
-  if (!el) return;
+  const group = $('queue-group');
+  const badge = $('badge-queue');
+  if (!group || !badge) return;
   const n = status.pendingQueue || 0;
   if (n > 0) {
-    el.textContent = `↺ ${n} na fila`;
-    el.className   = 'badge badge-warn';
-    el.hidden      = false;
+    badge.textContent = `↺ ${n} na fila`;
+    group.hidden      = false;
   } else {
-    el.hidden = true;
+    group.hidden = true;
   }
 }
 
@@ -311,6 +311,13 @@ $('sel-notifications').addEventListener('change', async (e) => {
 
 $('btn-clear-history').addEventListener('click', async () => {
   await api.clearHistory();
+  render(await api.getStatus());
+});
+
+// ── Limpar fila de sync pendente ──────────────────────────────────────────
+
+$('btn-clear-queue').addEventListener('click', async () => {
+  await api.clearQueue();
   render(await api.getStatus());
 });
 

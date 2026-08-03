@@ -65,7 +65,10 @@
       <div class="badges-row">
         <span class="badge" id="badge-game">◻ Jogo não detectado</span>
         <span class="badge" id="badge-sync">Monitorando...</span>
-        <span class="badge badge-warn" id="badge-queue" hidden></span>
+        <span class="queue-group" id="queue-group" hidden>
+          <span class="badge badge-warn" id="badge-queue"></span>
+          <button class="btn-link dim" id="btn-clear-queue" title="Limpar fila de sync pendente">limpar</button>
+        </span>
       </div>
       <div class="actions-row">
         <button class="btn btn-ghost btn-sm" id="btn-manual-sync">↺ Sync agora</button>

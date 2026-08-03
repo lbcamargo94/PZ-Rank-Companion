@@ -897,6 +897,12 @@ ipcMain.handle('clear-history', () => {
   return { success: true };
 });
 
+ipcMain.handle('clear-queue', () => {
+  saveQueue([]);
+  sendToRenderer('status-update', getStatusPayload());
+  return { success: true };
+});
+
 ipcMain.handle('switch-profile', (_, nick) => {
   const profiles = config.savedProfiles || [];
   const profile  = profiles.find(p => p.nick.toLowerCase() === nick.toLowerCase());

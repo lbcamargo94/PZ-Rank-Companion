@@ -206,6 +206,12 @@ body {
   background: rgba(230,126,34,.08);
 }
 
+.queue-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .badge-muted {
   color: var(--muted);
   border-color: var(--border);
