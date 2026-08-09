@@ -339,6 +339,27 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', (e) => e.preventDefault());
 
+// Envia sinal ao backend para verificar se a live encerrou (fire-and-forget, timeout 5s)
+async function sendLiveCheckHeartbeat(sessionEnd = false) {
+  if (!config.playerToken) return;
+  const body = sessionEnd
+    ? { player_token: config.playerToken, session_end: true }
+    : { player_token: config.playerToken, live_check: true };
+  await postRequest(`${config.apiUrl}/sync/heartbeat`, body);
+}
+
+// Antes de fechar o app: sinaliza session_end ao backend para checar live encerrada.
+// Usa evento before-quit para ter tempo de fazer a requisição async antes do exit.
+let isQuitting = false;
+app.on('before-quit', (event) => {
+  if (isQuitting) return;
+  event.preventDefault();
+  isQuitting = true;
+  sendLiveCheckHeartbeat(true)
+    .catch(() => {})
+    .finally(() => app.exit(0));
+});
+
 // ── Tray ──────────────────────────────────────────────────────────────────
 
 function createTray() {
@@ -381,7 +402,7 @@ function updateTray() {
       click:   toggleAutostart,
     },
     { type: 'separator' },
-    { label: 'Sair', click: () => { watcher?.close(); app.exit(0); } },
+    { label: 'Sair', click: () => { watcher?.close(); app.quit(); } },
   ]);
   tray.setContextMenu(menu);
 }
@@ -1081,6 +1102,10 @@ function applyGameRunning(running) {
     // Elimina a disputa de CPU entre o renderer do Electron e o jogo.
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.setFrameRate(running ? 1 : 60);
+    }
+    // Jogo acabou de fechar: verifica se a live do jogador encerrou
+    if (!running) {
+      sendLiveCheckHeartbeat(false).catch(() => {});
     }
     updateTray();
     sendToRenderer('status-update', getStatusPayload());
