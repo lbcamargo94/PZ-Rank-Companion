@@ -41,7 +41,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build and publish
+      # Builda os artefatos Mac localmente sem tentar criar a release do GitHub.
+      # O job Windows cria e publica a release; fazer POST /releases aqui causaria
+      # 422 "already_exists" pois os dois jobs rodam em paralelo.
+      - name: Build macOS app
+        run: npm run build:mac
+
+      # Aguarda a release existir (o job Windows pode terminar antes ou depois).
+      # Faz upload dos artefatos Mac + latest-mac.yml diretamente na release existente.
+      - name: Upload Mac artifacts to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run release:mac
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Aguardando release $TAG (até 3 min)..."
+          for i in $(seq 1 18); do
+            gh release view "$TAG" > /dev/null 2>&1 && break
+            echo "  tentativa $i/18 — aguardando 10s..."
+            sleep 10
+          done
+          echo "Fazendo upload dos artefatos Mac..."
+          find dist -maxdepth 1 \( -name "*.dmg" -o -name "*.zip" -o -name "latest-mac.yml" \) \
+            | xargs gh release upload "$TAG" --clobber
