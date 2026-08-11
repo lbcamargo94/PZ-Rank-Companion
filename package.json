@@ -6,9 +6,11 @@
   "license": "SEE LICENSE IN LICENSE",
   "main": "main.js",
   "scripts": {
-    "start": "SET ELECTRON_RUN_AS_NODE=&& electron .",
+    "start": "electron .",
     "build": "electron-builder --win",
-    "release": "electron-builder --win --publish always"
+    "build:mac": "electron-builder --mac",
+    "release": "electron-builder --win --publish always",
+    "release:mac": "electron-builder --mac --publish always"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -45,6 +47,18 @@
       "artifactName": "PZ.Rank.Companion.${version}.${ext}",
       "sign": null,
       "signingHashAlgorithms": null
+    },
+    "mac": {
+      "target": [
+        { "target": "dmg", "arch": ["x64", "arm64"] },
+        { "target": "zip", "arch": ["x64", "arm64"] }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "PZ.Rank.Companion.${version}.Mac.${arch}.${ext}",
+      "category": "public.app-category.utilities"
+    },
+    "dmg": {
+      "artifactName": "PZ.Rank.Companion.${version}.Mac.${arch}.dmg"
     },
     "nsis": {
       "oneClick": true,

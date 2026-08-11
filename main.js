@@ -396,7 +396,7 @@ function updateTray() {
     { label: 'Sincronizar agora', click: triggerManualSync, enabled: !!config.playerToken },
     { type: 'separator' },
     {
-      label:   'Iniciar com Windows',
+      label:   process.platform === 'darwin' ? 'Iniciar com o sistema' : 'Iniciar com Windows',
       type:    'checkbox',
       checked: config.autostart,
       click:   toggleAutostart,
@@ -1079,8 +1079,17 @@ function toggleAutostart() {
 }
 
 function checkGameRunning() {
-  // Steam launch: ProjectZomboid64.exe está visível no tasklist.
-  // Bat file / modo janela: o wrapper .exe não aparece — o processo real é
+  if (process.platform === 'darwin') {
+    // macOS — Steam lança o jogo via wrapper .app; o processo real é java.
+    // pgrep -x verifica nome exato; -f verifica a linha de comando completa.
+    exec('pgrep -x "ProjectZomboid64"', (err, stdout) => {
+      if (!err && stdout.trim()) { applyGameRunning(true); return; }
+      exec('pgrep -f "ProjectZomboid"', (_e, out) => applyGameRunning(!!out.trim()));
+    });
+    return;
+  }
+  // Windows — Steam launch: ProjectZomboid64.exe visível no tasklist.
+  // Bat file / modo janela: wrapper .exe não aparece — processo real é
   // java.exe em <pasta do PZ>/jre64/bin/java.exe. Verificamos os dois casos.
   exec('tasklist /FI "IMAGENAME eq ProjectZomboid64.exe" /NH /FO CSV 2>NUL', (err, stdout) => {
     if (!err && stdout.toLowerCase().includes('projectzomboid64.exe')) {
