@@ -105,11 +105,17 @@ function renderSyncBadge(status) {
 
 // ── Mod outdated banner ───────────────────────────────────────────────────
 
+let modOutdatedDismissed = false;
+
 function renderModOutdatedBanner(status) {
   const banner = $('mod-outdated-banner');
   if (!banner) return;
-  if (status.modOutdated) banner.hidden = false;
-  else banner.hidden = true;
+  if (!status.modOutdated) {
+    modOutdatedDismissed = false; // mod atualizado — permite mostrar de novo futuramente
+    banner.hidden = true;
+  } else if (!modOutdatedDismissed) {
+    banner.hidden = false;
+  }
 }
 
 $('btn-open-workshop').addEventListener('click', () => {
@@ -117,6 +123,7 @@ $('btn-open-workshop').addEventListener('click', () => {
 });
 
 $('btn-dismiss-mod-outdated').addEventListener('click', () => {
+  modOutdatedDismissed = true;
   $('mod-outdated-banner').hidden = true;
 });
 

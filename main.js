@@ -179,6 +179,11 @@ let watcherError    = null;    // null = ok, string = mensagem de erro
 let gameRunning     = false;   // true se ProjectZomboid64.exe está em execução
 let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
 let modOutdated      = false;  // true quando backend retorna 426 (mod desatualizado)
+let gameJavaPid      = null;   // PID do java.exe rodando o PZ (Windows — fallback via powershell)
+
+// Queue em memória — evita leitura de disco a cada getStatusPayload().
+// Inicializado em app.whenReady() após loadConfig().
+let _queue = [];
 
 function historyPath() {
   return path.join(app.getPath('userData'), 'sync-history.json');
@@ -217,21 +222,21 @@ function loadQueue() {
 }
 
 function saveQueue(queue) {
+  _queue = queue;
   try { fs.writeFileSync(queuePath(), JSON.stringify(queue, null, 2), 'utf-8'); } catch {}
 }
 
 function enqueue(code, disqualification_reason = null) {
-  const queue = loadQueue();
-  if (queue.some(i => i.code === code)) return;
-  queue.push({ code, disqualification_reason, addedAt: Date.now(), retries: 0, nextRetryAt: Date.now() + retryDelayFor(0) });
-  saveQueue(queue);
+  if (_queue.some(i => i.code === code)) return;
+  _queue.push({ code, disqualification_reason, addedAt: Date.now(), retries: 0, nextRetryAt: Date.now() + retryDelayFor(0) });
+  try { fs.writeFileSync(queuePath(), JSON.stringify(_queue, null, 2), 'utf-8'); } catch {}
   console.log('[queue] adicionado:', code.slice(0, 20) + '…');
 }
 
 async function retryQueue() {
-  if (!config.playerToken) return;
+  if (!config.playerToken || modOutdated) return;
   const now   = Date.now();
-  const queue = loadQueue();
+  const queue = _queue;
   if (queue.length === 0) return;
 
   // Descarta itens expirados antes de tentar reenviar
@@ -250,6 +255,7 @@ async function retryQueue() {
   const due       = valid.filter(i => now >= (i.nextRetryAt ?? 0));
   const notDue    = valid.filter(i => now <  (i.nextRetryAt ?? 0));
   const remaining = [...notDue];
+  _queue = valid; // sincroniza em memória após filtragem de expirados
 
   if (due.length === 0) return;
   console.log(`[queue] tentando reenviar ${due.length} item(s) (${notDue.length} aguardando backoff)`);
@@ -289,7 +295,7 @@ async function retryQueue() {
     }
   }
 
-  saveQueue(remaining);
+  saveQueue(remaining); // atualiza _queue + disco
   sendToRenderer('status-update', getStatusPayload());
 }
 
@@ -302,6 +308,7 @@ app.on('second-instance', () => mainWindow && (mainWindow.show(), mainWindow.foc
 
 app.whenReady().then(() => {
   config = loadConfig();
+  _queue = loadQueue();
   loadHistory();
   app.setAppUserModelId('com.pzrank.companion');
   createTray();
@@ -987,7 +994,7 @@ function getStatusPayload() {
     syncStatus,
     lastSync,
     syncHistory,
-    pendingQueue:   loadQueue().length,
+    pendingQueue:   _queue.length,
     watchDir:       config.watchDir,
     watchDirExists: fs.existsSync(config.watchDir),
     watcherError,
@@ -1090,16 +1097,40 @@ function checkGameRunning() {
   }
   // Windows — Steam launch: ProjectZomboid64.exe visível no tasklist.
   // Bat file / modo janela: wrapper .exe não aparece — processo real é
-  // java.exe em <pasta do PZ>/jre64/bin/java.exe. Verificamos os dois casos.
+  // java.exe em <pasta do PZ>/jre64/bin/java.exe.
   exec('tasklist /FI "IMAGENAME eq ProjectZomboid64.exe" /NH /FO CSV 2>NUL', (err, stdout) => {
     if (!err && stdout.toLowerCase().includes('projectzomboid64.exe')) {
+      gameJavaPid = null; // jogo detectado via .exe — limpa PID de sessão anterior
       applyGameRunning(true);
       return;
     }
-    // Fallback: verifica java.exe cujo caminho contém "ProjectZomboid"
+    if (gameJavaPid) {
+      // PID de java.exe salvo da detecção anterior: verificação por PID (evita spawnar PowerShell).
+      // tasklist por PID é ~10x mais rápido que Get-Process via PowerShell.
+      exec(`tasklist /FI "PID eq ${gameJavaPid}" /NH /FO CSV 2>NUL`, (_e, out) => {
+        if (!_e && out.toLowerCase().includes('java.exe')) {
+          applyGameRunning(true);
+        } else {
+          gameJavaPid = null; // java sumiu — jogo fechado
+          applyGameRunning(false);
+        }
+      });
+      return;
+    }
+    // Fallback PowerShell: só roda quando não há PID em cache (primeira detecção via java.exe).
+    // Extrai o PID junto com a detecção para usar nas verificações seguintes.
     exec(
-      'powershell -NoProfile -NonInteractive -Command "if (Get-Process java -ErrorAction SilentlyContinue | Where-Object { $_.Path -like \'*ProjectZomboid*\' }) { \'found\' }"',
-      (_e, out) => applyGameRunning(out.includes('found')),
+      'powershell -NoProfile -NonInteractive -Command "$p = Get-Process java -ErrorAction SilentlyContinue | Where-Object { $_.Path -like \'*ProjectZomboid*\' } | Select-Object -First 1; if ($p) { \'found:\' + $p.Id }"',
+      (_e, out) => {
+        const trimmed = out.trim();
+        if (trimmed.startsWith('found:')) {
+          const pid = parseInt(trimmed.slice('found:'.length), 10);
+          if (!isNaN(pid)) gameJavaPid = pid;
+          applyGameRunning(true);
+        } else {
+          applyGameRunning(false);
+        }
+      },
     );
   });
 }

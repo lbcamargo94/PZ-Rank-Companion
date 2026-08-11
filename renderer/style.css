@@ -121,6 +121,21 @@ body {
 .update-error      .update-icon { color: var(--red); }
 .mod-outdated      { border-color: #3d2e00; background: #1f1700; }
 .mod-outdated      .update-icon { color: var(--orange); }
+.mod-outdated      .update-sub strong { color: var(--orange); }
+
+.btn-workshop {
+  background: var(--orange);
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+.btn-workshop:hover { background: #cf6d17; }
 
 .btn-update {
   background: var(--orange);
