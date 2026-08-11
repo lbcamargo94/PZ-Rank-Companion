@@ -3,6 +3,7 @@
   "version": "1.8.5",
   "description": "PZ Community Rank - Auto-sync companion",
   "author": "lbcamargo94",
+  "license": "SEE LICENSE IN LICENSE",
   "main": "main.js",
   "scripts": {
     "start": "SET ELECTRON_RUN_AS_NODE=&& electron .",
