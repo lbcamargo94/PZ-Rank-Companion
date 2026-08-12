@@ -13,9 +13,9 @@ const crypto           = require('crypto');
 const { exec }         = require('child_process');
 
 // Chave HMAC para assinatura dos syncs — deve coincidir com SYNC_HMAC_SECRET no backend.
-// Dividida em partes para dificultar extração direta do binário.
-const _hs = ['5ae8c084ea5f', 'b4e5cc1c71c8', '7ddd55eab075', '0120052ffbdb', '13abf950a045', '15e1'];
-const SYNC_HMAC_SECRET = _hs.join('');
+// O valor real é injetado pelo CI (GitHub Actions secret) antes do build.
+// Builds locais ou de forks mantêm o placeholder → HMAC inválido → backend rejeita com 400.
+const SYNC_HMAC_SECRET = '__SYNC_HMAC_SECRET__';
 
 function signCode(playerToken, code) {
   return crypto.createHmac('sha256', SYNC_HMAC_SECRET)
@@ -320,6 +320,8 @@ app.whenReady().then(() => {
   setInterval(retryQueue, 5 * 60_000);
   fetchAndWriteAllowedMods();
   setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
+  fetchAndWriteRank();
+  setInterval(fetchAndWriteRank, 5 * 60_000);          // atualiza rank a cada 5 min
 
   // Heartbeat de detecção de mod removido: a cada 5min verifica se o jogo está
   // rodando mas nenhum arquivo PZR foi gerado nos últimos 30min → mod removido.
@@ -723,6 +725,45 @@ async function checkModHeartbeat() {
     sendToRenderer('status-update', getStatusPayload());
   } catch (err) {
     console.error('[heartbeat] Falha ao enviar sinal de mod removido:', err.message);
+  }
+}
+
+// Busca o ranking público no backend e escreve pz_rank_rank.log na watchDir
+// para que o mod Lua possa exibir a tabela in-game via RankListUI.
+// Formato: linhas "pos|nick|charName|score|profession|timeStr|kills" (# = comentário).
+async function fetchAndWriteRank() {
+  try {
+    const url    = `${config.apiUrl}/entries`;
+    const result = await getRequest(url);
+    const raw    = Array.isArray(result) ? result : (result.entries ?? result.data ?? []);
+
+    // Apenas entradas qualificadas, ordenadas por score (endpoint já ordena)
+    const entries = raw.filter(e => e.sandbox_ok !== false).slice(0, 25);
+
+    const sanitize = (v) => String(v ?? '').replace(/\|/g, ' ').replace(/\n/g, ' ');
+
+    const lines = [
+      '# PZ Community Rank',
+      `# updated:${new Date().toISOString()}`,
+    ];
+    entries.forEach((e, i) => {
+      lines.push([
+        i + 1,
+        sanitize(e.name || e.character_name),
+        sanitize(e.character_name),
+        e.score  ?? 0,
+        sanitize(e.profession),
+        sanitize(e.time_str),
+        e.kills  ?? 0,
+      ].join('|'));
+    });
+
+    const outPath = path.join(config.watchDir, 'pz_rank_rank.log');
+    fs.mkdirSync(path.dirname(outPath), { recursive: true });
+    fs.writeFileSync(outPath, lines.join('\n') + '\n', 'utf-8');
+    console.log(`[rank] arquivo atualizado: ${entries.length} entradas -> ${outPath}`);
+  } catch (err) {
+    console.warn('[rank] falha ao buscar ranking:', err.message);
   }
 }
 

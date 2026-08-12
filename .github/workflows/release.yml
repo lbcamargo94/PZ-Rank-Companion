@@ -21,6 +21,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Inject SYNC_HMAC_SECRET
+        env:
+          SYNC_HMAC_SECRET: ${{ secrets.SYNC_HMAC_SECRET }}
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            let content = fs.readFileSync('main.js', 'utf8');
+            const secret = process.env.SYNC_HMAC_SECRET;
+            if (!secret) { console.error('SYNC_HMAC_SECRET nao configurado!'); process.exit(1); }
+            content = content.replace(\"'__SYNC_HMAC_SECRET__'\", JSON.stringify(secret));
+            fs.writeFileSync('main.js', content);
+            console.log('SYNC_HMAC_SECRET injetado com sucesso.');
+          "
+
       - name: Build and publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -40,6 +55,21 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Inject SYNC_HMAC_SECRET
+        env:
+          SYNC_HMAC_SECRET: ${{ secrets.SYNC_HMAC_SECRET }}
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            let content = fs.readFileSync('main.js', 'utf8');
+            const secret = process.env.SYNC_HMAC_SECRET;
+            if (!secret) { console.error('SYNC_HMAC_SECRET nao configurado!'); process.exit(1); }
+            content = content.replace(\"'__SYNC_HMAC_SECRET__'\", JSON.stringify(secret));
+            fs.writeFileSync('main.js', content);
+            console.log('SYNC_HMAC_SECRET injetado com sucesso.');
+          "
 
       # Builda os artefatos Mac localmente sem tentar criar a release do GitHub.
       # O job Windows cria e publica a release; fazer POST /releases aqui causaria
