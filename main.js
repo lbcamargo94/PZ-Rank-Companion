@@ -737,8 +737,8 @@ async function fetchAndWriteRank() {
     const result = await getRequest(url);
     const raw    = Array.isArray(result) ? result : (result.entries ?? result.data ?? []);
 
-    // Apenas entradas qualificadas, ordenadas por score (endpoint já ordena)
-    const entries = raw.filter(e => e.sandbox_ok !== false).slice(0, 25);
+    // Top 25 por score — mesmo critério do site (endpoint já ordena por score)
+    const entries = raw.slice(0, 25);
 
     const sanitize = (v) => String(v ?? '').replace(/\|/g, ' ').replace(/\n/g, ' ');
 
