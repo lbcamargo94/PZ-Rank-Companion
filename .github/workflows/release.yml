@@ -74,7 +74,11 @@ jobs:
       # Builda os artefatos Mac localmente sem tentar criar a release do GitHub.
       # O job Windows cria e publica a release; fazer POST /releases aqui causaria
       # 422 "already_exists" pois os dois jobs rodam em paralelo.
+      # GH_TOKEN é necessário pois o electron-builder consulta a API do GitHub
+      # mesmo com --publish never quando publish.provider=github está configurado.
       - name: Build macOS app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build:mac
 
       # Aguarda a release existir (o job Windows pode terminar antes ou depois).
