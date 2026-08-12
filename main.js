@@ -103,12 +103,17 @@ function encryptToken(token) {
 
 function decryptToken(value) {
   if (!value) return '';
-  try {
-    if (safeStorage.isEncryptionAvailable()) {
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
       return safeStorage.decryptString(Buffer.from(value, 'base64'));
+    } catch {
+      // Falha na descriptografia (ex: Keychain negado no Mac com app não assinado,
+      // ou token de versão anterior em texto claro). Se o valor sobreviver ao
+      // Buffer.from sem lançar, pode ser texto claro — tenta retornar como está.
+      // Se for base64 inválido ou garbage, retorna '' para forçar novo login.
+      const isLikelyPlainToken = /^[a-f0-9-]{20,}$/.test(value);
+      return isLikelyPlainToken ? value : '';
     }
-  } catch {
-    // valor pode ser texto claro de versão anterior — retorna como está
   }
   return value;
 }
@@ -519,8 +524,10 @@ async function triggerManualSync() {
       .sort((a, b) => b.mtime - a.mtime);
     if (files.length === 0) return { success: false, error: 'Nenhum arquivo de rank encontrado na pasta.' };
     const content = fs.readFileSync(files[0].fp, 'utf-8');
-    await handleNewRankFileContent(content, files[0].fp);
-    return { success: true };
+    const result  = await handleNewRankFileContent(content, files[0].fp);
+    return result?.ok === false
+      ? { success: false, error: result.error || 'Falha no sync.' }
+      : { success: true };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -564,15 +571,15 @@ async function handleNewRankFileContent(content, filePath) {
   if (!config.playerToken) {
     notify('PZ Rank', 'Arquivo detectado — configure o jogador no app.', 'system');
     showMainWindow();
-    return;
+    return { ok: false, error: 'Jogador não conectado.' };
   }
 
   const extracted = extractCodeFromContent(content);
-  if (!extracted) { console.warn('[sync] nenhum código encontrado no arquivo'); return; }
+  if (!extracted) { console.warn('[sync] nenhum código encontrado no arquivo'); return { ok: false, error: 'Nenhum código encontrado no arquivo.' }; }
   if (extracted.legacy) {
     console.warn('[sync] código PZRX1 detectado — mod desatualizado');
     notify('⚠ Mod desatualizado', 'Atualize o mod PZ Rank para sincronizar automaticamente.', 'sync-error');
-    return;
+    return { ok: false, error: 'Mod desatualizado (PZRX1).' };
   }
   const code                   = extracted.code;
   const disqualification_reason = extracted.disqualification_reason ?? null;
@@ -596,10 +603,11 @@ async function handleNewRankFileContent(content, filePath) {
       : 'Rank atualizado!';
     notify('✓ Rank sincronizado!', body, 'sync-ok');
 
-    // Após o rank ser gravado no DB, envia o sandbox do mesmo personagem.
-    // Necessário porque os dois arquivos são gerados quase ao mesmo tempo e
-    // o sandbox pode chegar ao backend antes da entrada existir (race condition).
     trySendSandboxForCharacter(result.character_name).catch(() => {});
+
+    updateTray();
+    sendToRenderer('status-update', getStatusPayload());
+    return { ok: true };
   } catch (err) {
     syncStatus = 'error';
     pushHistory({ ts: Date.now(), characterName: null, score: null, ok: false, error: err.message });
@@ -617,10 +625,11 @@ async function handleNewRankFileContent(content, filePath) {
       enqueue(code, disqualification_reason);
       notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.', 'sync-error');
     }
-  }
 
-  updateTray();
-  sendToRenderer('status-update', getStatusPayload());
+    updateTray();
+    sendToRenderer('status-update', getStatusPayload());
+    return { ok: false, error: err.message };
+  }
 }
 
 // ── Sandbox sync ─────────────────────────────────────────────────────────────
