@@ -1,6 +1,6 @@
 {
   "name": "pz-rank-companion",
-  "version": "1.9.6",
+  "version": "1.9.7",
   "description": "PZ Community Rank - Auto-sync companion",
   "author": "lbcamargo94",
   "license": "SEE LICENSE IN LICENSE",
@@ -9,8 +9,10 @@
     "start": "electron .",
     "build": "electron-builder --win",
     "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
     "release": "electron-builder --win --publish always",
-    "release:mac": "electron-builder --mac --publish always"
+    "release:mac": "electron-builder --mac --publish always",
+    "release:linux": "electron-builder --linux --publish always"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -59,6 +61,15 @@
       "identity": null,
       "gatekeeperAssess": false,
       "hardenedRuntime": false
+    },
+    "linux": {
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb",      "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "PZ.Rank.Companion.${version}.${ext}",
+      "category": "Utility"
     },
     "dmg": {
       "artifactName": "PZ.Rank.Companion.${version}.Mac.${arch}.dmg"

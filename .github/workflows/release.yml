@@ -41,6 +41,55 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release
 
+  build-linux:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Inject SYNC_HMAC_SECRET
+        env:
+          SYNC_HMAC_SECRET: ${{ secrets.SYNC_HMAC_SECRET }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            let content = fs.readFileSync('main.js', 'utf8');
+            const secret = process.env.SYNC_HMAC_SECRET;
+            if (!secret) { console.error('SYNC_HMAC_SECRET nao configurado!'); process.exit(1); }
+            content = content.replace(\"'__SYNC_HMAC_SECRET__'\", JSON.stringify(secret));
+            fs.writeFileSync('main.js', content);
+            console.log('SYNC_HMAC_SECRET injetado com sucesso.');
+          "
+
+      - name: Build Linux app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:linux
+
+      - name: Upload Linux artifacts to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "Aguardando release $TAG (até 3 min)..."
+          for i in $(seq 1 18); do
+            gh release view "$TAG" > /dev/null 2>&1 && break
+            echo "  tentativa $i/18 — aguardando 10s..."
+            sleep 10
+          done
+          echo "Fazendo upload dos artefatos Linux..."
+          find dist -maxdepth 1 \( -name "*.AppImage" -o -name "*.deb" -o -name "latest-linux.yml" \) \
+            | xargs gh release upload "$TAG" --clobber
+
   build-mac:
     runs-on: macos-latest
     permissions:

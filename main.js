@@ -389,6 +389,8 @@ function createTray() {
   tray = new Tray(icon);
   tray.setToolTip('PZ Rank Companion');
   tray.on('double-click', showMainWindow);
+  // No Linux, muitos DEs não disparam 'double-click' no system tray — usa 'click' também
+  if (process.platform === 'linux') tray.on('click', showMainWindow);
   updateTray();
 }
 
@@ -410,7 +412,7 @@ function updateTray() {
     { label: 'Sincronizar agora', click: triggerManualSync, enabled: !!config.playerToken },
     { type: 'separator' },
     {
-      label:   process.platform === 'darwin' ? 'Iniciar com o sistema' : 'Iniciar com Windows',
+      label:   process.platform === 'win32' ? 'Iniciar com Windows' : 'Iniciar com o sistema',
       type:    'checkbox',
       checked: config.autostart,
       click:   toggleAutostart,
@@ -1136,9 +1138,8 @@ function toggleAutostart() {
 }
 
 function checkGameRunning() {
-  if (process.platform === 'darwin') {
-    // macOS — Steam lança o jogo via wrapper .app; o processo real é java.
-    // pgrep -x verifica nome exato; -f verifica a linha de comando completa.
+  if (process.platform === 'darwin' || process.platform === 'linux') {
+    // macOS e Linux — pgrep -x verifica nome exato; -f verifica a linha de comando completa.
     exec('pgrep -x "ProjectZomboid64"', (err, stdout) => {
       if (!err && stdout.trim()) { applyGameRunning(true); return; }
       exec('pgrep -f "ProjectZomboid"', (_e, out) => applyGameRunning(!!out.trim()));
