@@ -340,12 +340,21 @@ app.whenReady().then(() => {
   // require('electron-updater') acesse require('electron').app corretamente.
   initAutoUpdater();
 
-  if (app.isPackaged) {
+  // No Linux, o auto-updater só funciona com AppImage (requer env $APPIMAGE para reescrever o arquivo).
+  // Pacote DEB não suporta auto-atualização via electron-updater.
+  const supportsAutoUpdate = app.isPackaged && (
+    process.platform !== 'linux' || !!process.env.APPIMAGE
+  );
+
+  if (supportsAutoUpdate) {
     setUpdateState({ phase: 'checking' });
     setTimeout(() => autoUpdater && autoUpdater.checkForUpdates().catch((err) => {
       setUpdateState({ phase: 'error', message: err.message || String(err) });
     }), 4000);
     setInterval(() => autoUpdater && autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60_000);
+  } else if (app.isPackaged) {
+    // Linux DEB: atualização manual pelo gerenciador de pacotes
+    setUpdateState({ phase: 'up-to-date' });
   } else {
     setUpdateState({ phase: 'dev' });
   }
@@ -382,6 +391,8 @@ function createTray() {
   try {
     icon = nativeImage.createFromPath(iconPath);
     if (icon.isEmpty()) throw new Error('empty');
+    // Template image no macOS: adapta automaticamente ao modo claro/escuro da menu bar
+    if (process.platform === 'darwin') icon.setTemplateImage(true);
   } catch {
     icon = nativeImage.createEmpty();
   }
