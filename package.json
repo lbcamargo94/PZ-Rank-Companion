@@ -1,8 +1,11 @@
 {
   "name": "pz-rank-companion",
-  "version": "1.9.8",
+  "version": "1.9.9",
   "description": "PZ Community Rank - Auto-sync companion",
-  "author": "lbcamargo94",
+  "author": {
+    "name": "lbcamargo94",
+    "email": "lb.camargo94@gmail.com"
+  },
   "license": "SEE LICENSE IN LICENSE",
   "main": "main.js",
   "scripts": {
