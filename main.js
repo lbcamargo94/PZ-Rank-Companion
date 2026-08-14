@@ -185,6 +185,7 @@ let gameRunning     = false;   // true se ProjectZomboid64.exe está em execuç�
 let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
 let modOutdated      = false;  // true quando backend retorna 426 (mod desatualizado)
 let gameJavaPid      = null;   // PID do java.exe rodando o PZ (Windows — fallback via powershell)
+let lastSandboxHash  = null;   // SHA-256 do último sandbox_config enviado com sucesso
 
 // Queue em memória — evita leitura de disco a cada getStatusPayload().
 // Inicializado em app.whenReady() após loadConfig().
@@ -326,7 +327,7 @@ app.whenReady().then(() => {
   fetchAndWriteAllowedMods();
   setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
   fetchAndWriteRank();
-  setInterval(fetchAndWriteRank, 5 * 60_000);          // atualiza rank a cada 5 min
+  setInterval(fetchAndWriteRank, 15 * 60_000);         // atualiza rank a cada 15 min
 
   // Heartbeat de detecção de mod removido: a cada 5min verifica se o jogo está
   // rodando mas nenhum arquivo PZR foi gerado nos últimos 30min → mod removido.
@@ -683,8 +684,16 @@ async function handleNewSandboxFile(filePath) {
     return;
   }
 
+  // Não reenvia se o conteúdo não mudou desde o último envio bem-sucedido
+  const hash = crypto.createHash('sha256').update(JSON.stringify(sandboxData)).digest('hex');
+  if (hash === lastSandboxHash) {
+    console.log('[sandbox] sem alterações — ignorado');
+    return;
+  }
+
   try {
     await postSandbox(config.playerToken, sandboxData);
+    lastSandboxHash = hash;
     console.log('[sandbox] enviado com sucesso');
   } catch (err) {
     // Sandbox é best-effort — falha silenciosa, nao afeta o rank
@@ -753,14 +762,13 @@ async function checkModHeartbeat() {
 // Busca o ranking público no backend e escreve pz_rank_rank.log na watchDir
 // para que o mod Lua possa exibir a tabela in-game via RankListUI.
 // Formato: linhas "pos|nick|charName|score|profession|timeStr|kills" (# = comentário).
+// Usa /sync/rank-summary em vez de /entries — payload ~80% menor, só campos necessários.
 async function fetchAndWriteRank() {
   try {
-    const url    = `${config.apiUrl}/entries`;
+    const url    = `${config.apiUrl}/sync/rank-summary`;
     const result = await getRequest(url);
-    const raw    = Array.isArray(result) ? result : (result.entries ?? result.data ?? []);
-
-    // Apenas jogadores vivos, sem limite de quantidade (endpoint já ordena por score)
-    const entries = raw.filter(e => e.is_alive === true);
+    // rank-summary já retorna só entradas vivas e aprovadas, ordenadas por score
+    const entries = Array.isArray(result) ? result : [];
 
     const sanitize = (v) => String(v ?? '').replace(/\|/g, ' ').replace(/\n/g, ' ');
 
