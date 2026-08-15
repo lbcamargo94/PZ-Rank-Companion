@@ -36,13 +36,12 @@ jobs:
           path: node_modules
           key: ${{ runner.os }}-node22-modules-${{ hashFiles('package-lock.json') }}
 
+      - name: Install setuptools (distutils para Python 3.12)
+        run: pip install setuptools
+
       - name: Install dependencies
         if: steps.cache-modules.outputs.cache-hit != 'true'
         run: npm ci --ignore-scripts
-
-      - name: Upgrade node-gyp (Python 3.12 + VS2022)
-        if: steps.cache-modules.outputs.cache-hit != 'true'
-        run: npm install node-gyp@latest --no-save
 
       - name: Rebuild native modules for Electron
         if: steps.cache-modules.outputs.cache-hit != 'true'
