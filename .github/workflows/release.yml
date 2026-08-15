@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     permissions:
       contents: write
     env:
@@ -40,16 +40,11 @@ jobs:
         if: steps.cache-modules.outputs.cache-hit != 'true'
         run: npm ci --ignore-scripts
 
-      - name: Upgrade node-gyp for VS detection
-        if: steps.cache-modules.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          npm install node-gyp@latest --no-save
-          Remove-Item -Recurse -Force "node_modules/@electron/rebuild/node_modules/node-gyp" -ErrorAction SilentlyContinue
-
       - name: Rebuild native modules for Electron
         if: steps.cache-modules.outputs.cache-hit != 'true'
         timeout-minutes: 15
+        env:
+          npm_config_msvs_version: '2022'
         run: npx electron-rebuild --verbose
 
       - name: Inject SYNC_HMAC_SECRET
