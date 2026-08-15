@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          npm version "$VERSION" --no-git-tag-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -118,7 +118,7 @@ jobs:
       - name: Sync version from tag
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          npm version "$VERSION" --no-git-tag-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -201,7 +201,7 @@ jobs:
         shell: bash
         run: |
           VERSION="${GITHUB_REF#refs/tags/v}"
-          npm version "$VERSION" --no-git-tag-version
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Inject SYNC_HMAC_SECRET
         env:
