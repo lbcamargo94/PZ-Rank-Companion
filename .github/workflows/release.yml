@@ -19,7 +19,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -54,7 +54,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -103,7 +103,7 @@ jobs:
           node-version: 20
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -120,18 +120,11 @@ jobs:
             console.log('SYNC_HMAC_SECRET injetado com sucesso.');
           "
 
-      # Builda os artefatos Mac localmente sem tentar criar a release do GitHub.
-      # O job Windows cria e publica a release; fazer POST /releases aqui causaria
-      # 422 "already_exists" pois os dois jobs rodam em paralelo.
-      # GH_TOKEN é necessário pois o electron-builder consulta a API do GitHub
-      # mesmo com --publish never quando publish.provider=github está configurado.
       - name: Build macOS app
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run build:mac
 
-      # Aguarda a release existir (o job Windows pode terminar antes ou depois).
-      # Faz upload dos artefatos Mac + latest-mac.yml diretamente na release existente.
       - name: Upload Mac artifacts to release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
