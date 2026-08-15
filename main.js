@@ -635,6 +635,7 @@ async function handleNewRankFileContent(content, filePath) {
     if (result.waiting_for_live) {
       syncStatus = 'ok';
       sendToRenderer('status-update', getStatusPayload());
+      notify('⏳ Aguardando live', 'Rank só é sincronizado durante transmissões ao vivo no YouTube.', 'system');
       return { ok: true, waiting_for_live: true };
     }
 
