@@ -494,6 +494,539 @@ function timeAgo(ts) {
   return `há ${Math.floor(m / 60)}h`;
 }
 
+// ── Meus Saves ───────────────────────────────────────────────────────────
+
+let selectedCharName = null;
+let compareChars     = new Set();  // slugs of up to 2 chars selected for comparison
+let charLiMap        = new Map();  // charName → { li, cmpBtn }
+
+// Achievement filter state — persists within the session
+let achSearch       = '';
+let achTierFilter   = '';     // '' = all
+let achStatusFilter = 'all';  // 'all' | 'unlocked' | 'locked'
+
+async function initSaves() {
+  const characters = await api.getCharacters?.();
+  renderSaves(characters || []);
+  api.onCharactersUpdate?.((chars) => renderSaves(chars || []));
+  $('btn-refresh-saves').addEventListener('click', async () => {
+    renderSaves((await api.getCharacters?.()) || []);
+  });
+}
+
+function renderSaves(characters) {
+  const section = $('sec-saves');
+  const ul      = $('saves-list');
+  ul.innerHTML  = '';
+  $('save-detail-panel').innerHTML = '';
+  selectedCharName = null;
+  compareChars.clear();
+  charLiMap.clear();
+
+  if (!characters || characters.length === 0) {
+    section.hidden = true;
+    return;
+  }
+
+  section.hidden = false;
+
+  characters.forEach(c => {
+    const li = document.createElement('li');
+    li.className = 'save-item';
+    li.title = `Última vez visto: ${new Date(c.last_seen).toLocaleDateString('pt-BR')}`;
+
+    const dot = document.createElement('span');
+    dot.className = 'save-status ' + (c.status === 'alive' ? 'alive' : c.status === 'dead' ? 'dead' : '');
+
+    const name = document.createElement('span');
+    name.className   = 'save-name';
+    name.textContent = c.char_name;
+
+    const score = document.createElement('span');
+    score.className   = 'save-score';
+    score.textContent = c.score > 0 ? `${c.score} pts` : '';
+
+    const pos = document.createElement('span');
+    pos.className   = 'save-time';
+    pos.textContent = c.rank_position ? `#${c.rank_position}` : '';
+
+    const cmpBtn = document.createElement('button');
+    cmpBtn.className   = 'btn-cmp';
+    cmpBtn.textContent = '⇔';
+    cmpBtn.title       = 'Selecionar para comparar';
+    cmpBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleCompare(c.char_name);
+    });
+
+    charLiMap.set(c.char_name, { li, cmpBtn });
+
+    li.append(dot, name, score, pos, cmpBtn);
+    li.addEventListener('click', () => {
+      if (compareChars.size > 0) return; // em modo comparação, clique abre detalhe apenas se não há seleção ativa
+      openSaveDetail(c.char_name);
+    });
+    ul.appendChild(li);
+  });
+}
+
+function toggleCompare(charName) {
+  const refs = charLiMap.get(charName);
+  if (!refs) return;
+
+  if (compareChars.has(charName)) {
+    compareChars.delete(charName);
+    refs.li.classList.remove('save-item-cmp');
+    refs.cmpBtn.classList.remove('btn-cmp-active');
+  } else {
+    if (compareChars.size >= 2) {
+      const evict = [...compareChars][0];
+      compareChars.delete(evict);
+      const evictRefs = charLiMap.get(evict);
+      if (evictRefs) {
+        evictRefs.li.classList.remove('save-item-cmp');
+        evictRefs.cmpBtn.classList.remove('btn-cmp-active');
+      }
+    }
+    compareChars.add(charName);
+    refs.li.classList.add('save-item-cmp');
+    refs.cmpBtn.classList.add('btn-cmp-active');
+  }
+
+  if (compareChars.size === 2) {
+    selectedCharName = null;
+    const [a, b] = [...compareChars];
+    openCompare(a, b);
+  } else if (compareChars.size === 0) {
+    $('save-detail-panel').innerHTML = '';
+    selectedCharName = null;
+  } else {
+    // 1 selecionado — aguarda o segundo
+    $('save-detail-panel').innerHTML = '';
+    const hint = document.createElement('p');
+    hint.style.cssText = 'font-size:11px;color:var(--muted);padding:8px 0;text-align:center;';
+    hint.textContent   = 'Selecione outro personagem para comparar…';
+    $('save-detail-panel').appendChild(hint);
+    selectedCharName = null;
+  }
+}
+
+async function openCompare(charNameA, charNameB) {
+  const panel = $('save-detail-panel');
+  panel.innerHTML = '';
+
+  const [detailA, detailB] = await Promise.all([
+    api.getCharacterDetail?.(charNameA),
+    api.getCharacterDetail?.(charNameB),
+  ]);
+  if (!detailA || !detailB) return;
+
+  const div = document.createElement('div');
+  div.className = 'compare-panel';
+
+  const TIER_ORD = { legendary: 0, platinum: 1, gold: 2, silver: 3, bronze: 4 };
+  const topTierA = detailA.achievements?.reduce((best, a) => {
+    const o = TIER_ORD[a.achievement_tier] ?? 9;
+    return o < best ? o : best;
+  }, 9);
+  const topTierB = detailB.achievements?.reduce((best, a) => {
+    const o = TIER_ORD[a.achievement_tier] ?? 9;
+    return o < best ? o : best;
+  }, 9);
+  const tierName = ['Lendária','Platina','Ouro','Prata','Bronze'];
+
+  const rows = [
+    { label: '',            a: charNameA,                                          b: charNameB,                                          isHeader: true },
+    { label: 'Score',       a: fmtNum(detailA.character?.score),                   b: fmtNum(detailB.character?.score),                   numA: detailA.character?.score ?? 0,       numB: detailB.character?.score ?? 0,       higherBetter: true  },
+    { label: 'Posição',     a: detailA.character?.rank_position ? '#'+detailA.character.rank_position : '—', b: detailB.character?.rank_position ? '#'+detailB.character.rank_position : '—', numA: detailA.character?.rank_position ?? 999, numB: detailB.character?.rank_position ?? 999, higherBetter: false },
+    { label: 'Status',      a: statusLabel(detailA.character?.status),              b: statusLabel(detailB.character?.status),              numA: null, numB: null },
+    { label: 'Syncs',       a: detailA.history?.length ?? 0,                       b: detailB.history?.length ?? 0,                       numA: null, numB: null },
+    { label: 'Conquistas',  a: detailA.achievements?.length ?? 0,                  b: detailB.achievements?.length ?? 0,                  numA: detailA.achievements?.length ?? 0,   numB: detailB.achievements?.length ?? 0,   higherBetter: true  },
+    { label: 'Melhor tier', a: topTierA < 9 ? tierName[topTierA] : '—',           b: topTierB < 9 ? tierName[topTierB] : '—',           numA: topTierA < 9 ? (4 - topTierA) : 0,  numB: topTierB < 9 ? (4 - topTierB) : 0,  higherBetter: true  },
+    { label: 'Primeiro sync', a: fmtDate(detailA.character?.first_seen),           b: fmtDate(detailB.character?.first_seen),             numA: null, numB: null },
+  ];
+
+  const table = document.createElement('table');
+  table.className = 'compare-table';
+
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    if (row.isHeader) tr.className = 'compare-header';
+
+    const tdLabel = document.createElement(row.isHeader ? 'th' : 'td');
+    tdLabel.className   = 'compare-label';
+    tdLabel.textContent = row.label;
+    tr.appendChild(tdLabel);
+
+    ['a', 'b'].forEach((side, idx) => {
+      const td = document.createElement(row.isHeader ? 'th' : 'td');
+      td.className   = 'compare-' + side;
+      td.textContent = row[side];
+
+      if (!row.isHeader && row.numA !== null && row.numB !== null && row.numA !== row.numB) {
+        const better = row.higherBetter
+          ? (side === 'a' ? row.numA > row.numB : row.numB > row.numA)
+          : (side === 'a' ? row.numA < row.numB : row.numB < row.numA);
+        if (better) td.classList.add('compare-winner');
+      }
+
+      tr.appendChild(td);
+    });
+
+    table.appendChild(tr);
+  });
+
+  div.appendChild(table);
+  panel.appendChild(div);
+}
+
+function statusLabel(s) {
+  if (s === 'alive') return '● Vivo';
+  if (s === 'dead')  return '✕ Morto';
+  return '— Desconhecido';
+}
+
+function fmtNum(v) {
+  if (v == null || v === 0) return '—';
+  return Number(v).toLocaleString('pt-BR');
+}
+
+function fmtDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleDateString('pt-BR');
+}
+
+async function openSaveDetail(charName) {
+  const panel = $('save-detail-panel');
+
+  if (selectedCharName === charName) {
+    selectedCharName = null;
+    panel.innerHTML  = '';
+    return;
+  }
+  selectedCharName = charName;
+
+  // Reset filters when opening a new character
+  achSearch       = '';
+  achTierFilter   = '';
+  achStatusFilter = 'all';
+
+  const [detail, catalog] = await Promise.all([
+    api.getCharacterDetail?.(charName),
+    api.getCatalog?.(),
+  ]);
+  if (!detail) { panel.innerHTML = ''; return; }
+
+  panel.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'save-detail';
+
+  // ── Export row ────────────────────────────────────────────────────────
+  const exportRow = document.createElement('div');
+  exportRow.className = 'save-detail-export-row';
+
+  const expLabel = document.createElement('span');
+  expLabel.className   = 'save-detail-title';
+  expLabel.textContent = charName;
+
+  const expJson = document.createElement('button');
+  expJson.className   = 'btn btn-ghost btn-sm';
+  expJson.textContent = '↓ JSON';
+  expJson.title       = 'Exportar histórico e conquistas como JSON';
+  expJson.addEventListener('click', async () => {
+    expJson.disabled = true;
+    await api.exportCharacterData?.(charName, 'json');
+    expJson.disabled = false;
+  });
+
+  const expCsv = document.createElement('button');
+  expCsv.className   = 'btn btn-ghost btn-sm';
+  expCsv.textContent = '↓ CSV';
+  expCsv.title       = 'Exportar histórico de sync como CSV';
+  expCsv.addEventListener('click', async () => {
+    expCsv.disabled = true;
+    await api.exportCharacterData?.(charName, 'csv');
+    expCsv.disabled = false;
+  });
+
+  exportRow.append(expLabel, expJson, expCsv);
+  div.appendChild(exportRow);
+
+  // ── Rank history chart ────────────────────────────────────────────────
+  const rankPoints = (detail.history || []).filter(h => h.rank_position != null);
+  if (rankPoints.length >= 2) {
+    const chartSection = document.createElement('div');
+    chartSection.className = 'save-chart-section';
+
+    const chartTitle = document.createElement('p');
+    chartTitle.className   = 'save-detail-title';
+    chartTitle.textContent = 'Histórico de posição no ranking';
+    chartSection.appendChild(chartTitle);
+    chartSection.appendChild(buildRankChart(rankPoints));
+    div.appendChild(chartSection);
+  }
+
+  // ── Achievements ──────────────────────────────────────────────────────
+  const allCatalog    = Array.isArray(catalog) && catalog.length > 0 ? catalog : [];
+  const unlockedSlugs = new Set((detail.achievements || []).map(a => a.achievement_slug));
+  const unlockedMap   = new Map((detail.achievements || []).map(a => [a.achievement_slug, a]));
+
+  const achSection = document.createElement('div');
+  achSection.className = 'ach-section';
+
+  const achCountLabel = allCatalog.length > 0
+    ? `Conquistas (${unlockedSlugs.size}/${allCatalog.length})`
+    : `Conquistas (${unlockedSlugs.size})`;
+
+  const achTitleEl = document.createElement('p');
+  achTitleEl.className   = 'save-detail-title';
+  achTitleEl.textContent = achCountLabel;
+  achSection.appendChild(achTitleEl);
+
+  if (allCatalog.length > 0) {
+    // Progress bar
+    const progressWrap = document.createElement('div');
+    progressWrap.className = 'ach-progress-wrap';
+    const progressFill = document.createElement('div');
+    progressFill.className   = 'ach-progress-fill';
+    const pct = Math.round((unlockedSlugs.size / allCatalog.length) * 100);
+    progressFill.style.width = pct + '%';
+    progressWrap.appendChild(progressFill);
+    achSection.appendChild(progressWrap);
+
+    // Filters
+    const filterRow = document.createElement('div');
+    filterRow.className = 'ach-filter-row';
+
+    const searchInput = document.createElement('input');
+    searchInput.className   = 'ach-search';
+    searchInput.placeholder = 'Buscar…';
+    searchInput.type        = 'text';
+    searchInput.value       = achSearch;
+
+    const tierSel = document.createElement('select');
+    tierSel.className = 'sel-settings ach-sel';
+    [['', 'Nível'], ['legendary', '🔴 Lendária'], ['platinum', '🟣 Platina'], ['gold', '🟡 Ouro'], ['silver', '⚪ Prata'], ['bronze', '🟤 Bronze']].forEach(([val, lbl]) => {
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = lbl;
+      if (achTierFilter === val) opt.selected = true;
+      tierSel.appendChild(opt);
+    });
+
+    const statusSel = document.createElement('select');
+    statusSel.className = 'sel-settings ach-sel';
+    [['all', 'Todas'], ['unlocked', '✓ Desbloqueadas'], ['locked', '🔒 Bloqueadas']].forEach(([val, lbl]) => {
+      const opt = document.createElement('option');
+      opt.value = val; opt.textContent = lbl;
+      if (achStatusFilter === val) opt.selected = true;
+      statusSel.appendChild(opt);
+    });
+
+    filterRow.append(searchInput, tierSel, statusSel);
+    achSection.appendChild(filterRow);
+
+    const achList = document.createElement('ul');
+    achList.className = 'achievement-list-full';
+
+    function renderAchList() {
+      achList.innerHTML = '';
+      const q      = achSearch.toLowerCase().trim();
+      const tier   = achTierFilter;
+      const status = achStatusFilter;
+
+      const TIER_ORD = { legendary: 0, platinum: 1, gold: 2, silver: 3, bronze: 4 };
+
+      const visible = allCatalog.filter(a => {
+        if (tier   && a.tier !== tier) return false;
+        if (status === 'unlocked' && !unlockedSlugs.has(a.slug)) return false;
+        if (status === 'locked'   &&  unlockedSlugs.has(a.slug)) return false;
+        if (q && !a.name?.toLowerCase().includes(q) && !a.description?.toLowerCase().includes(q)) return false;
+        return true;
+      }).sort((a, b) => {
+        const aU = unlockedSlugs.has(a.slug) ? 0 : 1;
+        const bU = unlockedSlugs.has(b.slug) ? 0 : 1;
+        if (aU !== bU) return aU - bU;
+        return (TIER_ORD[a.tier] ?? 9) - (TIER_ORD[b.tier] ?? 9);
+      });
+
+      if (visible.length === 0) {
+        const li = document.createElement('li');
+        li.className   = 'ach-item-empty';
+        li.textContent = 'Nenhuma conquista encontrada.';
+        achList.appendChild(li);
+        return;
+      }
+
+      const TIER_CLR = { legendary: '#c0392b', platinum: '#9b59b6', gold: '#d4ac0d', silver: '#95a5a6', bronze: '#e67e22' };
+
+      visible.forEach(a => {
+        const isUnlocked = unlockedSlugs.has(a.slug);
+        const record     = isUnlocked ? unlockedMap.get(a.slug) : null;
+
+        const li = document.createElement('li');
+        li.className = 'ach-item-full' + (isUnlocked ? ' ach-unlocked' : ' ach-locked');
+
+        const tierDot = document.createElement('span');
+        tierDot.className         = 'ach-tier-dot';
+        tierDot.style.background  = TIER_CLR[a.tier] ?? '#555';
+
+        const iconEl = document.createElement('span');
+        iconEl.className   = 'ach-icon-full';
+        iconEl.textContent = a.icon || '🏆';
+
+        const info = document.createElement('div');
+        info.className = 'ach-info';
+
+        const nm = document.createElement('span');
+        nm.className   = 'ach-name-full';
+        nm.textContent = a.name || a.slug;
+
+        const desc = document.createElement('span');
+        desc.className   = 'ach-desc';
+        desc.textContent = a.description || '';
+
+        info.append(nm, desc);
+
+        const meta = document.createElement('div');
+        meta.className = 'ach-meta';
+
+        if (isUnlocked && record) {
+          const check = document.createElement('span');
+          check.className   = 'ach-check';
+          check.textContent = '✓';
+          const date = document.createElement('span');
+          date.className   = 'ach-date';
+          date.textContent = new Date(record.unlocked_at).toLocaleDateString('pt-BR');
+          meta.append(check, date);
+        } else {
+          const lock = document.createElement('span');
+          lock.className   = 'ach-lock';
+          lock.textContent = '🔒';
+          meta.append(lock);
+        }
+
+        li.append(tierDot, iconEl, info, meta);
+        achList.appendChild(li);
+      });
+    }
+
+    searchInput.addEventListener('input', (e) => { achSearch = e.target.value; renderAchList(); });
+    tierSel.addEventListener('change',   (e) => { achTierFilter   = e.target.value; renderAchList(); });
+    statusSel.addEventListener('change', (e) => { achStatusFilter = e.target.value; renderAchList(); });
+
+    renderAchList();
+    achSection.appendChild(achList);
+
+  } else {
+    // Sem catálogo — mostra apenas as conquistas desbloqueadas (simples)
+    const achList = document.createElement('ul');
+    achList.className = 'achievement-list';
+
+    if (detail.achievements && detail.achievements.length > 0) {
+      detail.achievements.forEach(a => {
+        const li = document.createElement('li');
+        li.className = 'achievement-item';
+
+        const icon = document.createElement('span');
+        icon.className   = 'ach-icon';
+        icon.textContent = a.achievement_tier === 'legendary' ? '🔴'
+          : a.achievement_tier === 'platinum' ? '🟣'
+          : a.achievement_tier === 'gold'     ? '🥇'
+          : a.achievement_tier === 'silver'   ? '🥈' : '🥉';
+
+        const nm = document.createElement('span');
+        nm.className   = 'ach-name';
+        nm.textContent = a.achievement_name || a.achievement_slug;
+
+        li.append(icon, nm);
+        achList.appendChild(li);
+      });
+    } else {
+      const li = document.createElement('li');
+      li.className   = 'achievement-item';
+      li.style.color = 'var(--muted)';
+      li.textContent = 'Nenhuma conquista ainda.';
+      achList.appendChild(li);
+    }
+    achSection.appendChild(achList);
+  }
+
+  div.appendChild(achSection);
+  panel.appendChild(div);
+}
+
+function buildRankChart(rankPoints) {
+  const W = 300, H = 56, PAD = 6;
+
+  // Most recent 30 points, chronological order
+  const pts = rankPoints.slice(0, 30).reverse();
+
+  const maxPos = Math.max(...pts.map(h => h.rank_position));
+  const minPos = Math.min(...pts.map(h => h.rank_position));
+  const range  = Math.max(maxPos - minPos, 1);
+  const xStep  = (W - PAD * 2) / Math.max(pts.length - 1, 1);
+
+  const coords = pts.map((h, i) => {
+    const x = PAD + i * xStep;
+    // Lower rank number = better = higher on chart (smaller Y)
+    const y = PAD + ((h.rank_position - minPos) / range) * (H - PAD * 2);
+    return [x.toFixed(1), y.toFixed(1)];
+  });
+
+  const ns  = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width',   W);
+  svg.setAttribute('height',  H);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.className = 'rank-chart';
+
+  const bg = document.createElementNS(ns, 'rect');
+  bg.setAttribute('width', W); bg.setAttribute('height', H); bg.setAttribute('fill', '#0e0e0e');
+  svg.appendChild(bg);
+
+  // Filled area under line
+  const firstPt = coords[0];
+  const lastPt  = coords[coords.length - 1];
+  const areaPoints = coords.map(c => c.join(',')).join(' ')
+    + ` ${lastPt[0]},${H} ${firstPt[0]},${H}`;
+  const area = document.createElementNS(ns, 'polygon');
+  area.setAttribute('points', areaPoints);
+  area.setAttribute('fill',   'rgba(39,174,96,0.12)');
+  svg.appendChild(area);
+
+  // Line
+  const polyline = document.createElementNS(ns, 'polyline');
+  polyline.setAttribute('points',          coords.map(c => c.join(',')).join(' '));
+  polyline.setAttribute('fill',            'none');
+  polyline.setAttribute('stroke',          '#27ae60');
+  polyline.setAttribute('stroke-width',    '1.5');
+  polyline.setAttribute('stroke-linejoin', 'round');
+  polyline.setAttribute('stroke-linecap',  'round');
+  svg.appendChild(polyline);
+
+  // Latest point marker
+  const lx = parseFloat(lastPt[0]);
+  const ly = parseFloat(lastPt[1]);
+  const circle = document.createElementNS(ns, 'circle');
+  circle.setAttribute('cx', lx); circle.setAttribute('cy', ly);
+  circle.setAttribute('r', '3'); circle.setAttribute('fill', '#27ae60');
+  svg.appendChild(circle);
+
+  // Label: current rank
+  const lastData = pts[pts.length - 1];
+  const text = document.createElementNS(ns, 'text');
+  text.setAttribute('x',           Math.min(lx + 4, W - PAD));
+  text.setAttribute('y',           Math.max(ly - 4, PAD + 8));
+  text.setAttribute('fill',        '#888');
+  text.setAttribute('font-size',   '9');
+  text.setAttribute('font-family', 'monospace');
+  text.textContent = `#${lastData.rank_position}`;
+  svg.appendChild(text);
+
+  return svg;
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────
 
 init();
+initSaves();

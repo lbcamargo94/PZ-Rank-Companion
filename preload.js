@@ -27,4 +27,11 @@ contextBridge.exposeInMainWorld('api', {
   checkForUpdates:  ()       => ipcRenderer.invoke('check-for-updates'),
   installUpdate:    ()       => ipcRenderer.invoke('install-update'),
   onUpdateStatus:   (cb)     => ipcRenderer.on('update-status', (_, data) => cb(data)),
+  // Fase 3 — banco local
+  getCharacters:       ()         => ipcRenderer.invoke('get-characters'),
+  getCharacterDetail:  (charName) => ipcRenderer.invoke('get-character-detail', charName),
+  onCharactersUpdate:  (cb)       => ipcRenderer.on('characters-update', (_, data) => cb(data)),
+  // Fase 4 — gerenciador local
+  getCatalog:          ()                   => ipcRenderer.invoke('get-catalog'),
+  exportCharacterData: (charName, format)   => ipcRenderer.invoke('export-character-data', charName, format),
 });

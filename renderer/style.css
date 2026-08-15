@@ -470,5 +470,296 @@ body {
 }
 .sel-settings:focus { outline: none; border-color: var(--red); }
 
+/* ── Meus Saves ─────────────────────────── */
+.saves-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.saves-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.save-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  cursor: pointer;
+}
+.save-item:last-child { border-bottom: none; }
+.save-item:hover { opacity: .85; }
+
+.save-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--muted);
+}
+.save-status.alive { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.save-status.dead  { background: var(--red);   }
+
+.save-name  { flex: 1; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.save-score { color: var(--subtle); font-size: 11px; white-space: nowrap; flex-shrink: 0; }
+.save-time  { color: var(--muted);  font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+
+/* Detail panel (inline expansion) */
+.save-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+}
+
+.save-detail-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--muted);
+}
+
+.achievement-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.achievement-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--subtle);
+}
+
+.ach-icon  { font-size: 13px; flex-shrink: 0; }
+.ach-name  { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ach-tier  { font-size: 10px; opacity: .6; flex-shrink: 0; }
+
+/* ── Fase 4: Compare button ─────────────── */
+.btn-cmp {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+  padding: 1px 5px;
+  font-family: inherit;
+  flex-shrink: 0;
+  line-height: 1.4;
+  transition: background .1s, color .1s, border-color .1s;
+}
+.btn-cmp:hover         { border-color: #444; color: #aaa; background: #1e1e1e; }
+.btn-cmp-active        { border-color: var(--green); color: var(--green); background: rgba(39,174,96,.1); }
+.save-item-cmp         { background: rgba(39,174,96,.05); }
+
+/* ── Compare panel ───────────────────────── */
+.compare-panel {
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+}
+
+.compare-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.compare-table th,
+.compare-table td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  color: var(--subtle);
+}
+.compare-table tr:last-child td { border-bottom: none; }
+
+.compare-header th {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  padding-bottom: 4px;
+}
+
+.compare-label {
+  text-align: left !important;
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  width: 30%;
+  white-space: nowrap;
+}
+
+.compare-a,
+.compare-b { color: var(--subtle); }
+
+.compare-winner {
+  color: var(--green) !important;
+  font-weight: 700;
+}
+
+/* ── Save detail export row ──────────────── */
+.save-detail-export-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.save-detail-export-row .save-detail-title { flex: 1; }
+
+/* ── Rank history chart ──────────────────── */
+.save-chart-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rank-chart {
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  overflow: hidden;
+  display: block;
+}
+
+/* ── Achievement section (Fase 4 full) ───── */
+.ach-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ach-progress-wrap {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.ach-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width .3s;
+}
+
+.ach-filter-row {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.ach-search {
+  flex: 1;
+  min-width: 80px;
+  background: #111;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 4px 8px;
+  outline: none;
+  font-family: inherit;
+}
+.ach-search:focus { border-color: var(--red); }
+.ach-search::placeholder { color: var(--muted); }
+
+.ach-sel {
+  font-size: 10px;
+  padding: 3px 5px;
+}
+
+.achievement-list-full {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+.achievement-list-full::-webkit-scrollbar { width: 4px; }
+.achievement-list-full::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+
+.ach-item-full {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+.ach-item-full:last-child { border-bottom: none; }
+
+.ach-locked { opacity: .5; }
+
+.ach-tier-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.ach-icon-full { font-size: 14px; flex-shrink: 0; }
+
+.ach-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ach-name-full {
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ach-locked .ach-name-full { color: var(--subtle); }
+
+.ach-desc {
+  font-size: 10px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ach-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 1px;
+}
+
+.ach-check { color: var(--green); font-size: 11px; font-weight: 700; }
+.ach-date  { font-size: 9px; color: var(--muted); }
+.ach-lock  { font-size: 11px; opacity: .4; }
+
+.ach-item-empty {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 0;
+  text-align: center;
+  list-style: none;
+}
+
 /* ── Footer ─────────────────────────────── */
 .footer { margin-top: auto; padding-top: 8px; text-align: center; }
