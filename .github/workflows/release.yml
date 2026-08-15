@@ -50,6 +50,12 @@ jobs:
           npm_config_msvs_version: '2022'
         run: npx electron-rebuild --verbose
 
+      - name: Sync version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          npm version "$VERSION" --no-git-tag-version
+
       - name: Inject SYNC_HMAC_SECRET
         env:
           SYNC_HMAC_SECRET: ${{ secrets.SYNC_HMAC_SECRET }}
@@ -108,6 +114,11 @@ jobs:
         if: steps.cache-modules.outputs.cache-hit != 'true'
         timeout-minutes: 15
         run: npx electron-rebuild
+
+      - name: Sync version from tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          npm version "$VERSION" --no-git-tag-version
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -185,6 +196,12 @@ jobs:
         if: steps.cache-modules.outputs.cache-hit != 'true'
         timeout-minutes: 15
         run: npx electron-rebuild --verbose
+
+      - name: Sync version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          npm version "$VERSION" --no-git-tag-version
 
       - name: Inject SYNC_HMAC_SECRET
         env:
