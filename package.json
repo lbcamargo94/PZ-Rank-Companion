@@ -29,6 +29,7 @@
   "build": {
     "appId": "com.pzrank.companion",
     "productName": "PZ Rank Companion",
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
