@@ -135,10 +135,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "Aguardando release $TAG (até 3 min)..."
-          for i in $(seq 1 18); do
+          echo "Aguardando release $TAG (até 15 min)..."
+          for i in $(seq 1 90); do
             gh release view "$TAG" > /dev/null 2>&1 && break
-            echo "  tentativa $i/18 — aguardando 10s..."
+            echo "  tentativa $i/90 — aguardando 10s..."
             sleep 10
           done
           echo "Fazendo upload dos artefatos Linux..."
@@ -213,10 +213,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
-          echo "Aguardando release $TAG (até 3 min)..."
-          for i in $(seq 1 18); do
+          echo "Aguardando release $TAG (até 15 min)..."
+          for i in $(seq 1 90); do
             gh release view "$TAG" > /dev/null 2>&1 && break
-            echo "  tentativa $i/18 — aguardando 10s..."
+            echo "  tentativa $i/90 — aguardando 10s..."
             sleep 10
           done
           echo "Fazendo upload dos artefatos Mac..."
