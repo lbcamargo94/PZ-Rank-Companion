@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      - name: Upgrade node-gyp
+        run: npm install node-gyp@latest
+
       - name: Inject SYNC_HMAC_SECRET
         env:
           SYNC_HMAC_SECRET: ${{ secrets.SYNC_HMAC_SECRET }}
@@ -109,6 +112,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci --ignore-scripts
+
+      - name: Upgrade node-gyp
+        run: npm install node-gyp@latest
 
       - name: Inject SYNC_HMAC_SECRET
         env:
