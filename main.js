@@ -285,7 +285,7 @@ async function retryQueue() {
   for (const item of due) {
     try {
       const result = await postSync(config.playerToken, item.code, item.disqualification_reason ?? null);
-      if (result.waiting_for_live) { syncStatus = 'ok'; continue; }
+
       const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: item.disqualification_reason ?? null };
       lastSync   = syncEntry;
       syncStatus = 'ok';
@@ -632,12 +632,6 @@ async function handleNewRankFileContent(content, filePath) {
   try {
     const result = await postSync(config.playerToken, code, disqualification_reason, heatmap_delta);
 
-    if (result.waiting_for_live) {
-      syncStatus = 'ok';
-      sendToRenderer('status-update', getStatusPayload());
-      notify('⏳ Aguardando live', 'Rank só é sincronizado durante transmissões ao vivo no YouTube.', 'system');
-      return { ok: true, waiting_for_live: true };
-    }
 
     const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: disqualification_reason ?? null };
     lastSync   = syncEntry;
