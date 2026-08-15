@@ -40,6 +40,10 @@ jobs:
         if: steps.cache-modules.outputs.cache-hit != 'true'
         run: npm ci --ignore-scripts
 
+      - name: Upgrade node-gyp (Python 3.12 + VS2022)
+        if: steps.cache-modules.outputs.cache-hit != 'true'
+        run: npm install node-gyp@latest --no-save
+
       - name: Rebuild native modules for Electron
         if: steps.cache-modules.outputs.cache-hit != 'true'
         timeout-minutes: 15
