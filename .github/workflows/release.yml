@@ -40,18 +40,12 @@ jobs:
         if: steps.cache-modules.outputs.cache-hit != 'true'
         run: npm ci --ignore-scripts
 
-      - name: Upgrade node-gyp inside @electron/rebuild
-        if: steps.cache-modules.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          Set-Location node_modules/@electron/rebuild
-          npm install node-gyp@latest
-
       - name: Rebuild native modules for Electron
         if: steps.cache-modules.outputs.cache-hit != 'true'
+        timeout-minutes: 15
         env:
           npm_config_msvs_version: '2022'
-        run: npx electron-rebuild
+        run: npx electron-rebuild --verbose
 
       - name: Inject SYNC_HMAC_SECRET
         env:
@@ -183,15 +177,10 @@ jobs:
         if: steps.cache-modules.outputs.cache-hit != 'true'
         run: npm ci --ignore-scripts
 
-      - name: Upgrade node-gyp inside @electron/rebuild
-        if: steps.cache-modules.outputs.cache-hit != 'true'
-        run: |
-          cd node_modules/@electron/rebuild
-          npm install node-gyp@latest
-
       - name: Rebuild native modules for Electron
         if: steps.cache-modules.outputs.cache-hit != 'true'
-        run: npx electron-rebuild
+        timeout-minutes: 15
+        run: npx electron-rebuild --verbose
 
       - name: Inject SYNC_HMAC_SECRET
         env:
