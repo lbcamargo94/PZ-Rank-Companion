@@ -43,9 +43,7 @@ jobs:
       - name: Upgrade node-gyp for VS2022 support
         if: steps.cache-modules.outputs.cache-hit != 'true'
         shell: pwsh
-        run: |
-          npm install node-gyp@latest --no-save
-          npm install node-gyp@latest --prefix node_modules/@electron/rebuild --no-save --ignore-scripts --no-package-lock
+        run: npm install node-gyp@latest --no-save
 
       - name: Rebuild native modules for Electron
         if: steps.cache-modules.outputs.cache-hit != 'true'
