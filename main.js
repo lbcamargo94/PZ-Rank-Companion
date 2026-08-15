@@ -11,11 +11,13 @@ const https            = require('https');
 const http             = require('http');
 const crypto           = require('crypto');
 const { exec }         = require('child_process');
+const db               = require('./db');
+const achievementsLocal = require('./achievements-local');
 
 // Chave HMAC para assinatura dos syncs — deve coincidir com SYNC_HMAC_SECRET no backend.
 // O valor real é injetado pelo CI (GitHub Actions secret) antes do build.
-// Builds locais ou de forks mantêm o placeholder → HMAC inválido → backend rejeita com 400.
-const SYNC_HMAC_SECRET = '__SYNC_HMAC_SECRET__';
+// Em dev local: defina SYNC_HMAC_SECRET como variável de ambiente antes de rodar npm start.
+const SYNC_HMAC_SECRET = process.env.SYNC_HMAC_SECRET || '__SYNC_HMAC_SECRET__';
 
 function signCode(playerToken, code) {
   return crypto.createHmac('sha256', SYNC_HMAC_SECRET)
@@ -186,6 +188,7 @@ let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
 let modOutdated      = false;  // true quando backend retorna 426 (mod desatualizado)
 let gameJavaPid      = null;   // PID do java.exe rodando o PZ (Windows — fallback via powershell)
 let lastSandboxHash  = null;   // SHA-256 do último sandbox_config enviado com sucesso
+let localStats       = {};     // { [charName]: stats } — cache em memória; não enviado ao backend
 
 // Queue em memória — evita leitura de disco a cada getStatusPayload().
 // Inicializado em app.whenReady() após loadConfig().
@@ -207,6 +210,19 @@ function pushHistory(entry) {
   syncHistory.unshift(entry);
   if (syncHistory.length > 10) syncHistory.length = 10;
   try { fs.writeFileSync(historyPath(), JSON.stringify(syncHistory, null, 2), 'utf-8'); } catch {}
+  if (entry.ok && entry.characterName) {
+    db.upsertCharacter(entry.characterName, {
+      status:       entry.isAlive === false ? 'dead' : 'alive',
+      score:        entry.score,
+      rankPosition: entry.rankPosition,
+    });
+    db.appendStatsHistory(entry.characterName, {
+      ts:           entry.ts,
+      score:        entry.score,
+      rankPosition: entry.rankPosition,
+    });
+    sendToRenderer('characters-update', db.getCharacters());
+  }
 }
 
 // ── Retry queue ───────────────────────────────────────────────────────────
@@ -269,7 +285,8 @@ async function retryQueue() {
   for (const item of due) {
     try {
       const result = await postSync(config.playerToken, item.code, item.disqualification_reason ?? null);
-      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: item.disqualification_reason ?? null };
+      if (result.waiting_for_live) { syncStatus = 'ok'; continue; }
+      const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: item.disqualification_reason ?? null };
       lastSync   = syncEntry;
       syncStatus = 'ok';
       if (modOutdated) modOutdated = false;
@@ -316,6 +333,8 @@ app.whenReady().then(() => {
   config = loadConfig();
   _queue = loadQueue();
   loadHistory();
+  db.init(app.getPath('userData'));
+  importLegacyHistoryOnce();
   app.setAppUserModelId('com.pzrank.companion');
   createTray();
   applyAutostart();
@@ -328,6 +347,8 @@ app.whenReady().then(() => {
   setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
   fetchAndWriteRank();
   setInterval(fetchAndWriteRank, 15 * 60_000);         // atualiza rank a cada 15 min
+  fetchAndCacheAchievementsCatalog();
+  setInterval(fetchAndCacheAchievementsCatalog, 24 * 60 * 60_000); // atualiza catálogo a cada 24h
 
   // Heartbeat de detecção de mod removido: a cada 5min verifica se o jogo está
   // rodando mas nenhum arquivo PZR foi gerado nos últimos 30min → mod removido.
@@ -515,6 +536,11 @@ function startWatcher() {
       handleNewRankFileContent(content, filePath);
     } else if (ext === '.log' && base.startsWith('pz_rank_sandbox_')) {
       handleNewSandboxFile(filePath);
+    } else if (ext === '.log' && base.startsWith('pz_rank_stats_')) {
+      const charName = path.basename(filePath, '.log').slice('pz_rank_stats_'.length);
+      handleNewStatsFile(filePath, charName);
+    } else if (base === 'pz_rank_saves.json' || base === 'pz_rank_saves.log') {
+      handleNewSavesManifest(filePath);
     }
   };
   watcher.on('add',    onFile);
@@ -606,7 +632,13 @@ async function handleNewRankFileContent(content, filePath) {
   try {
     const result = await postSync(config.playerToken, code, disqualification_reason, heatmap_delta);
 
-    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, ok: true, disqualificationReason: disqualification_reason ?? null };
+    if (result.waiting_for_live) {
+      syncStatus = 'ok';
+      sendToRenderer('status-update', getStatusPayload());
+      return { ok: true, waiting_for_live: true };
+    }
+
+    const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: disqualification_reason ?? null };
     lastSync   = syncEntry;
     syncStatus = 'ok';
     if (modOutdated) modOutdated = false;
@@ -698,6 +730,78 @@ async function handleNewSandboxFile(filePath) {
   } catch (err) {
     // Sandbox é best-effort — falha silenciosa, nao afeta o rank
     console.error('[sandbox] falha ignorada:', err.message);
+  }
+}
+
+function handleNewStatsFile(filePath, charName) {
+  if (!charName) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    if (!data || data.type !== 'rank_stats' || !data.stats) {
+      console.warn('[stats] ignorado — formato inválido:', filePath);
+      return;
+    }
+    localStats[charName] = data.stats;
+    console.log('[stats] carregado para', charName, '—', Object.keys(data.stats).length, 'campos');
+
+    // Persiste stats no registro mais recente de stats_history e avalia conquistas
+    db.updateStatsJson(charName, JSON.stringify(data.stats));
+    const char     = db.getCharacters().find(c => c.char_name === charName);
+    const kills    = char?.kills || 0;
+    const newUnlocks = achievementsLocal.evaluate(charName, data.stats, kills, {});
+    for (const ach of newUnlocks) {
+      const tierLabel = ach.tier ? ` [${ach.tier}]` : '';
+      notify(`🏆 Conquista desbloqueada!${tierLabel}`, ach.name || ach.slug, 'system');
+      console.log('[achievements] nova conquista:', ach.slug, 'para', charName);
+    }
+    if (newUnlocks.length > 0) sendToRenderer('characters-update', db.getCharacters());
+  } catch (err) {
+    console.error('[stats] erro ao ler:', filePath, err.message);
+  }
+}
+
+function handleNewSavesManifest(filePath) {
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    if (!data || data.type !== 'rank_saves' || !Array.isArray(data.characters)) return;
+    for (const c of data.characters) {
+      if (!c.name) continue;
+      db.upsertCharacter(c.name, { status: c.status });
+    }
+    console.log('[saves] manifesto processado:', data.characters.length, 'personagem(ns)');
+    sendToRenderer('characters-update', db.getCharacters());
+  } catch (err) {
+    console.error('[saves] erro ao ler manifesto:', err.message);
+  }
+}
+
+// Importa sync-history.json legado para o banco SQLite (executado uma vez no primeiro boot após Fase 3)
+function importLegacyHistoryOnce() {
+  try {
+    const flagPath = path.join(app.getPath('userData'), '.legacy-history-imported');
+    if (fs.existsSync(flagPath)) return;
+    const saved = JSON.parse(fs.readFileSync(historyPath(), 'utf-8'));
+    if (Array.isArray(saved) && saved.length > 0) {
+      const n = db.importLegacyHistory(saved);
+      console.log('[db] histórico legado importado:', n, 'entradas');
+    }
+    fs.writeFileSync(flagPath, '1', 'utf-8');
+  } catch { /* sem histórico anterior — ignora */ }
+}
+
+// Busca definições de conquistas do backend e cacheia no banco local
+async function fetchAndCacheAchievementsCatalog() {
+  const AGE_24H = 24 * 60 * 60 * 1000;
+  if (db.getCatalogAge() < AGE_24H) return; // ainda fresco
+  try {
+    const result = await getRequest(`${config.apiUrl}/achievements`);
+    const list   = result.achievements ?? result ?? [];
+    if (Array.isArray(list) && list.length > 0) {
+      db.upsertCatalog(list);
+      console.log('[achievements] catálogo atualizado:', list.length, 'conquistas');
+    }
+  } catch (err) {
+    console.warn('[achievements] falha ao buscar catálogo:', err.message);
   }
 }
 
@@ -1024,6 +1128,10 @@ ipcMain.handle('remove-profile', (_, nick) => {
   return { success: true };
 });
 
+ipcMain.handle('get-characters', () => db.getCharacters());
+
+ipcMain.handle('get-character-detail', (_, charName) => db.getCharacterDetail(charName));
+
 ipcMain.handle('check-for-updates', async () => {
   if (!app.isPackaged || !autoUpdater) {
     sendToRenderer('update-status', { phase: 'dev' });
@@ -1039,6 +1147,41 @@ ipcMain.handle('install-update', () => {
 
 ipcMain.handle('get-app-version',    () => app.getVersion());
 ipcMain.handle('get-update-status', () => updateState);
+
+ipcMain.handle('get-catalog', () => db.getCatalog());
+
+ipcMain.handle('export-character-data', async (_, charName, format) => {
+  const detail = db.getCharacterDetail(charName);
+  if (!detail) return { success: false, error: 'Personagem não encontrado' };
+
+  const safeName = charName.replace(/[^a-zA-Z0-9_\-]/g, '_');
+  const datePart = new Date().toISOString().slice(0, 10);
+  const ext      = format === 'csv' ? 'csv' : 'json';
+
+  const result = await dialog.showSaveDialog(mainWindow || undefined, {
+    title:       `Exportar dados — ${charName}`,
+    defaultPath: `${safeName}_${datePart}.${ext}`,
+    filters:     format === 'csv'
+      ? [{ name: 'CSV',  extensions: ['csv']  }]
+      : [{ name: 'JSON', extensions: ['json'] }],
+  });
+  if (result.canceled || !result.filePath) return { success: false };
+
+  try {
+    if (format === 'csv') {
+      const lines = ['ts,score,rank_position'];
+      for (const h of (detail.history || [])) {
+        lines.push([h.ts, h.score ?? '', h.rank_position ?? ''].join(','));
+      }
+      fs.writeFileSync(result.filePath, lines.join('\n'), 'utf-8');
+    } else {
+      fs.writeFileSync(result.filePath, JSON.stringify({ charName, ...detail }, null, 2), 'utf-8');
+    }
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
 
 ipcMain.handle('pick-folder', async () => {
   const defaultPath = fs.existsSync(config.watchDir) ? config.watchDir : os.homedir();
