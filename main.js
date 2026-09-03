@@ -121,9 +121,9 @@ function decryptToken(value) {
 }
 
 // apiUrl: selecionada automaticamente — produção quando empacotado, local em desenvolvimento.
-const PROD_API_URL  = 'https://pz-rank-backend.vercel.app';
+const PROD_API_URL  = 'https://www.pzrank.com.br';
 const DEV_API_URL   = 'http://localhost:3000';
-const PROD_SITE_URL = 'https://pzrank.com.br';
+const PROD_SITE_URL = 'https://www.pzrank.com.br';
 
 const DEFAULT_CONFIG = {
   nick:          '',
