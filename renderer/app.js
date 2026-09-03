@@ -437,8 +437,17 @@ function renderSyncHistory(history) {
     nameEl.textContent = name;
 
     const timeEl = document.createElement('span');
-    timeEl.className   = 'sync-time';
-    timeEl.textContent = when;
+    timeEl.className = 'sync-time';
+
+    const relEl = document.createElement('span');
+    relEl.textContent = when;
+
+    const exactEl = document.createElement('span');
+    exactEl.className   = 'sync-time-exact';
+    exactEl.textContent = new Date(item.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    timeEl.appendChild(relEl);
+    timeEl.appendChild(exactEl);
 
     li.appendChild(iconEl);
     li.appendChild(nameEl);
