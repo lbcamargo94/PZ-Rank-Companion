@@ -664,6 +664,9 @@ async function handleNewRankFileContent(content, filePath) {
       modOutdated = true;
       saveQueue([]); // descarta fila: todos os códigos pendentes são do mod antigo
       notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam para continuar sincronizando.', 'system');
+    } else if (err.status === 409 && err.body?.code === 'PLAYER_REMOVED') {
+      saveQueue([]); // descarta fila: sync nunca vai passar enquanto moderador não reativar
+      notify('✗ Personagem removido do rank', 'Contate um moderador para reativação.', 'system');
     } else {
       enqueue(code, disqualification_reason);
       notify('✗ Falha no sync', 'Salvo na fila — será reenviado automaticamente.', 'sync-error');
@@ -824,6 +827,7 @@ function postSandbox(playerToken, sandboxData) {
             if (res.statusCode >= 200 && res.statusCode < 300) return resolve(json);
             const err  = new Error(json.error || ('HTTP ' + res.statusCode));
             err.status = res.statusCode;
+            err.body   = json;
             reject(err);
           } catch { reject(new Error('Resposta invalida do servidor')); }
         });
@@ -979,6 +983,7 @@ function postSync(playerToken, code, disqualificationReason = null, heatmapDelta
             if (res.statusCode === 200 || res.statusCode === 201) return resolve(json);
             const err = new Error(json.error || `HTTP ${res.statusCode}`);
             err.status = res.statusCode;
+            err.body   = json;
             reject(err);
           } catch {
             reject(new Error('Resposta inválida do servidor'));
