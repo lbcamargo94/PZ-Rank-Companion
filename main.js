@@ -309,8 +309,9 @@ async function retryQueue() {
       }
       if (err.status === 426) {
         modOutdated = true;
+        saveQueue([]); // descarta todos os códigos: foram gerados pelo mod antigo e nunca passarão
         notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam.', 'system');
-        break; // não adianta tentar os outros itens da fila — todos falharão
+        break;
       }
       const retries = (item.retries ?? 0) + 1;
       remaining.push({ ...item, retries, nextRetryAt: Date.now() + retryDelayFor(retries) });
@@ -661,6 +662,7 @@ async function handleNewRankFileContent(content, filePath) {
       notify('✗ Sessão expirada', 'Reconecte o jogador no app.', 'system');
     } else if (err.status === 426) {
       modOutdated = true;
+      saveQueue([]); // descarta fila: todos os códigos pendentes são do mod antigo
       notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam para continuar sincronizando.', 'system');
     } else {
       enqueue(code, disqualification_reason);
