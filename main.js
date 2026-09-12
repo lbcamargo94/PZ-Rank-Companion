@@ -125,6 +125,22 @@ const PROD_API_URL  = 'https://www.pzrank.com.br';
 const DEV_API_URL   = 'http://localhost:3000';
 const PROD_SITE_URL = 'https://www.pzrank.com.br';
 
+// Detecta o caminho onde o PZ escreve os arquivos quando rodado via Proton no Linux.
+// AppID do PZ = 108600. Verifica as 3 localizações padrão do Steam no Linux.
+function detectProtonPath() {
+  if (process.platform !== 'linux') return null;
+  const home = os.homedir();
+  const candidates = [
+    // Steam instalado via pacote nativo
+    path.join(home, '.local', 'share', 'Steam', 'steamapps', 'compatdata', '108600', 'pfx', 'drive_c', 'users', 'steamuser', 'Zomboid', 'Lua', 'pz_rank'),
+    // Steam instalado via symlink ~/.steam
+    path.join(home, '.steam', 'steam', 'steamapps', 'compatdata', '108600', 'pfx', 'drive_c', 'users', 'steamuser', 'Zomboid', 'Lua', 'pz_rank'),
+    // Steam instalado via Flatpak (ex: Cachy OS, SteamOS)
+    path.join(home, '.var', 'app', 'com.valvesoftware.Steam', '.local', 'share', 'Steam', 'steamapps', 'compatdata', '108600', 'pfx', 'drive_c', 'users', 'steamuser', 'Zomboid', 'Lua', 'pz_rank'),
+  ];
+  return candidates.find(p => fs.existsSync(p)) || null;
+}
+
 const DEFAULT_CONFIG = {
   nick:          '',
   playerToken:   '',
@@ -1201,6 +1217,15 @@ ipcMain.handle('pick-folder', async () => {
   return { success: false };
 });
 
+ipcMain.handle('use-proton-path', (_, protonPath) => {
+  if (!protonPath || !fs.existsSync(protonPath)) return { success: false, error: 'Caminho Proton não encontrado.' };
+  config.watchDir = protonPath;
+  saveConfig();
+  startWatcher();
+  sendToRenderer('status-update', getStatusPayload());
+  return { success: true, path: protonPath };
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function getStatusPayload() {
@@ -1213,6 +1238,7 @@ function getStatusPayload() {
     pendingQueue:   _queue.length,
     watchDir:       config.watchDir,
     watchDirExists: fs.existsSync(config.watchDir),
+    protonPath:     detectProtonPath(),
     watcherError,
     gameRunning,
     hasProfile:     !!config.playerId,

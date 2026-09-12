@@ -58,6 +58,14 @@ function render(status) {
   warnEl.hidden = !(status.watcherError || status.watchDirExists === false);
   if (status.watcherError) warnEl.textContent = `⚠ ${status.watcherError}`;
 
+  // Hint Proton: exibe quando um caminho Proton existe E é diferente do watchDir atual
+  const protonHint = $('proton-hint');
+  if (protonHint) {
+    const showProton = !!(status.protonPath && status.protonPath !== status.watchDir);
+    protonHint.hidden = !showProton;
+    if (showProton) $('proton-hint-path').textContent = status.protonPath;
+  }
+
   const history = status.syncHistory || (status.lastSync ? [status.lastSync] : []);
   if (history.length > 0) {
     secLastSync.hidden = false;
@@ -303,6 +311,25 @@ $('btn-pick-folder').addEventListener('click', async () => {
     render(status);
   }
 });
+
+const btnUseProton = $('btn-use-proton-path');
+if (btnUseProton) {
+  btnUseProton.addEventListener('click', async () => {
+    const protonPath = $('proton-hint-path').textContent;
+    if (!protonPath) return;
+    btnUseProton.disabled    = true;
+    btnUseProton.textContent = 'Aplicando...';
+    const result = await api.useProtonPath(protonPath);
+    if (result.success) {
+      $('input-watchdir').value = result.path;
+      const status = await api.getStatus();
+      render(status);
+    } else {
+      btnUseProton.disabled    = false;
+      btnUseProton.textContent = 'Usar caminho do Proton';
+    }
+  });
+}
 
 // ── Autostart ─────────────────────────────────────────────────────────────
 

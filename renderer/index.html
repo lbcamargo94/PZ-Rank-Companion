@@ -125,6 +125,11 @@
           <button class="btn btn-ghost btn-sm btn-icon" id="btn-pick-folder" title="Selecionar pasta">📁</button>
         </div>
         <p class="field-warn" id="watchdir-warn" hidden>⚠ Pasta não encontrada. Clique em 📁 para selecionar manualmente.</p>
+        <div class="proton-hint" id="proton-hint" hidden>
+          <p>🎮 Detectamos que o jogo está rodando via <strong>Proton</strong>. Os arquivos do mod são gravados em um caminho diferente:</p>
+          <code id="proton-hint-path"></code>
+          <button class="btn btn-sm" id="btn-use-proton-path">Usar caminho do Proton</button>
+        </div>
       </div>
       <div class="toggle-row">
         <span>Iniciar com Windows</span>

@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('api', {
   switchProfile:   (nick)    => ipcRenderer.invoke('switch-profile', nick),
   removeProfile:   (nick)    => ipcRenderer.invoke('remove-profile', nick),
   pickFolder:      ()        => ipcRenderer.invoke('pick-folder'),
+  useProtonPath:   (p)      => ipcRenderer.invoke('use-proton-path', p),
   onStatusUpdate:  (cb)      => ipcRenderer.on('status-update',  (_, data) => cb(data)),
   // Auto-update
   getAppVersion:    ()       => ipcRenderer.invoke('get-app-version'),
