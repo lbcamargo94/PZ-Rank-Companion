@@ -422,6 +422,28 @@ $('btn-manual-sync').addEventListener('click', async () => {
   }
 });
 
+// ── Sync manual da whitelist de mods ────────────────────────────────────────
+// Util quando um moderador acabou de liberar um mod e o jogador quer usa-lo
+// na hora, sem esperar o ciclo automatico (a cada 10min).
+
+$('btn-sync-mods').addEventListener('click', async () => {
+  const btn = $('btn-sync-mods');
+  const msg = $('sync-mods-msg');
+  btn.disabled    = true;
+  btn.textContent = '↺ Atualizando...';
+  msg.hidden      = true;
+  try {
+    const result = await api.syncAllowedMods();
+    msg.textContent = result.success
+      ? `Lista atualizada: ${result.count} mod(s) permitido(s).`
+      : (result.error || 'Falha ao atualizar a lista de mods.');
+    msg.hidden = false;
+    setTimeout(() => { msg.hidden = true; }, 4000);
+  } finally {
+    setTimeout(() => { btn.disabled = false; btn.textContent = '↺ Atualizar mods permitidos'; }, 1500);
+  }
+});
+
 $('btn-view-profile').addEventListener('click', () => api.openProfile());
 
 // ── Footer ────────────────────────────────────────────────────────────────

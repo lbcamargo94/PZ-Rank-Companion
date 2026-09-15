@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   openSite:        ()        => ipcRenderer.invoke('open-site'),
   openProfile:     ()        => ipcRenderer.invoke('open-profile'),
   manualSync:      ()        => ipcRenderer.invoke('manual-sync'),
+  syncAllowedMods: ()        => ipcRenderer.invoke('sync-allowed-mods'),
   clearViolation:  ()        => ipcRenderer.invoke('clear-violation'),
   clearHistory:    ()        => ipcRenderer.invoke('clear-history'),
   clearQueue:      ()        => ipcRenderer.invoke('clear-queue'),

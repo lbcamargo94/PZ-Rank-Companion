@@ -361,7 +361,7 @@ app.whenReady().then(() => {
   retryQueue();
   setInterval(retryQueue, 5 * 60_000);
   fetchAndWriteAllowedMods();
-  setInterval(fetchAndWriteAllowedMods, 60 * 60_000); // atualiza whitelist a cada 1h
+  setInterval(fetchAndWriteAllowedMods, 10 * 60_000); // atualiza whitelist a cada 10min
   fetchAndWriteRank();
   setInterval(fetchAndWriteRank, 15 * 60_000);         // atualiza rank a cada 15 min
   fetchAndCacheAchievementsCatalog();
@@ -939,8 +939,10 @@ async function fetchAndWriteAllowedMods() {
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, lines.join('\n') + '\n', 'utf-8');
     console.log(`[mods] whitelist atualizada: ${mods.length} mod(s) -> ${outPath}`);
+    return { success: true, count: mods.length };
   } catch (err) {
     console.warn('[mods] falha ao buscar allowed-mods:', err.message);
+    return { success: false, error: err.message };
   }
 }
 
@@ -1100,6 +1102,8 @@ ipcMain.handle('open-profile', () => {
 });
 
 ipcMain.handle('manual-sync', () => triggerManualSync());
+
+ipcMain.handle('sync-allowed-mods', () => fetchAndWriteAllowedMods());
 
 ipcMain.handle('clear-violation', () => {
   try {
