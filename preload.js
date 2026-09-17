@@ -15,7 +15,6 @@ contextBridge.exposeInMainWorld('api', {
   openProfile:     ()        => ipcRenderer.invoke('open-profile'),
   manualSync:      ()        => ipcRenderer.invoke('manual-sync'),
   syncAllowedMods: ()        => ipcRenderer.invoke('sync-allowed-mods'),
-  clearViolation:  ()        => ipcRenderer.invoke('clear-violation'),
   clearHistory:    ()        => ipcRenderer.invoke('clear-history'),
   clearQueue:      ()        => ipcRenderer.invoke('clear-queue'),
   switchProfile:   (nick)    => ipcRenderer.invoke('switch-profile', nick),

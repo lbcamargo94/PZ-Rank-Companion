@@ -946,13 +946,6 @@ async function fetchAndWriteAllowedMods() {
   }
 }
 
-function writeClearViolation() {
-  const outPath = path.join(config.watchDir, 'pz_rank_clear_violation.txt');
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, 'clear', 'utf-8');
-  console.log('[violation] arquivo de limpeza escrito:', outPath);
-}
-
 // Deriva o nome sanitizado do personagem a partir do caminho do arquivo .txt.
 // ex: pz_rank_Liana.txt → "Liana"
 function charNameFromFilePath(filePath) {
@@ -1104,15 +1097,6 @@ ipcMain.handle('open-profile', () => {
 ipcMain.handle('manual-sync', () => triggerManualSync());
 
 ipcMain.handle('sync-allowed-mods', () => fetchAndWriteAllowedMods());
-
-ipcMain.handle('clear-violation', () => {
-  try {
-    writeClearViolation();
-    return { success: true };
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-});
 
 ipcMain.handle('clear-history', () => {
   syncHistory = [];
