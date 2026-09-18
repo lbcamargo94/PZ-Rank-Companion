@@ -203,6 +203,22 @@ let gameRunning     = false;   // true se ProjectZomboid64.exe está em execuç�
 let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
 let modOutdated      = false;  // true quando backend retorna 426 (mod desatualizado)
 let gameJavaPid      = null;   // PID do java.exe rodando o PZ (Windows — fallback via powershell)
+
+// Agenda de sync (não mais "um sync por escrita de arquivo"): o mod grava o
+// arquivo de rank com frequência (heartbeat a cada ~5min, além de eventos como
+// morte/virada de dia) - sincronizar toda vez gerava sync de rede + notificação
+// repetidos demais, pesando pra jogadores com PC fraco. Agora:
+//   - Watcher só guarda o conteúdo mais recente por arquivo (pendingRankContent),
+//     sem sincronizar na hora.
+//   - RANK_SYNC_INTERVAL_MS (10min): flush periódico de tudo que estiver pendente.
+//   - Início de save: a PRIMEIRA escrita depois do jogo abrir sincroniza na hora
+//     (via sessionJustStarted, resetado em applyGameRunning quando running vira true).
+//   - Fechamento do jogo: flush imediato do que estiver pendente (applyGameRunning
+//     quando running vira false), pra não perder o estado final da sessão.
+const RANK_SYNC_INTERVAL_MS = 10 * 60_000;
+const pendingRankContent = new Map(); // filePath -> conteúdo ainda não sincronizado
+const lastSyncedContent  = new Map(); // filePath -> último conteúdo já sincronizado (evita reenvio igual)
+let sessionJustStarted = true;        // true até a primeira escrita de rank ser sincronizada nesta sessão
 let lastSandboxHash  = null;   // SHA-256 do último sandbox_config enviado com sucesso
 let localStats       = {};     // { [charName]: stats } — cache em memória; não enviado ao backend
 
@@ -373,6 +389,7 @@ app.whenReady().then(() => {
   // ou salvamento automático sem mudança de estado (deduplicação do mod v2.3.9).
   // Mods v2.5.0+ incluem timestamp no código e sempre geram arquivo a cada 5min.
   setInterval(checkModHeartbeat, 5 * 60_000);
+  setInterval(flushPendingRankSyncs, RANK_SYNC_INTERVAL_MS); // sync agendado a cada 10min
   if (!config.playerToken) showMainWindow();
 
   // initAutoUpdater deve ser chamado aqui (pós-whenReady) para que
@@ -550,7 +567,7 @@ function startWatcher() {
         console.warn('[sync] arquivo desapareceu antes da leitura:', filePath);
         return;
       }
-      handleNewRankFileContent(content, filePath);
+      onRankFileWritten(content, filePath);
     } else if (ext === '.log' && base.startsWith('pz_rank_sandbox_')) {
       handleNewSandboxFile(filePath);
     } else if (ext === '.log' && base.startsWith('pz_rank_stats_')) {
@@ -581,6 +598,10 @@ async function triggerManualSync() {
       .sort((a, b) => b.mtime - a.mtime);
     if (files.length === 0) return { success: false, error: 'Nenhum arquivo de rank encontrado na pasta.' };
     const content = fs.readFileSync(files[0].fp, 'utf-8');
+    // Marca como ja sincronizado pra o flush periodico de 10min nao reenviar
+    // o mesmo conteudo logo em seguida.
+    lastSyncedContent.set(files[0].fp, content);
+    pendingRankContent.delete(files[0].fp);
     const result  = await handleNewRankFileContent(content, files[0].fp);
     return result?.ok === false
       ? { success: false, error: result.error || 'Falha no sync.' }
@@ -619,6 +640,32 @@ function extractCodeFromContent(content) {
     return null;
   } catch {
     return null;
+  }
+}
+
+// Chamado a cada escrita de arquivo de rank detectada pelo watcher (ver
+// comentário de pendingRankContent acima pra explicação da agenda). Guarda o
+// conteúdo mais recente; só sincroniza na hora se for a primeira escrita desta
+// sessão (início do save) - o resto fica pendente pro flush periódico/de saída.
+function onRankFileWritten(content, filePath) {
+  if (sessionJustStarted) {
+    sessionJustStarted = false;
+    lastSyncedContent.set(filePath, content);
+    pendingRankContent.delete(filePath);
+    handleNewRankFileContent(content, filePath);
+    return;
+  }
+  pendingRankContent.set(filePath, content);
+}
+
+// Sincroniza tudo que estiver pendente (conteúdo diferente do último já
+// enviado). Usado pelo timer de 10min e no fechamento do jogo.
+function flushPendingRankSyncs() {
+  for (const [filePath, content] of pendingRankContent) {
+    pendingRankContent.delete(filePath);
+    if (lastSyncedContent.get(filePath) === content) continue; // nada mudou
+    lastSyncedContent.set(filePath, content);
+    handleNewRankFileContent(content, filePath);
   }
 }
 
@@ -1372,9 +1419,16 @@ function applyGameRunning(running) {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.setFrameRate(running ? 1 : 60);
     }
-    // Jogo acabou de fechar: verifica se a live do jogador encerrou
-    if (!running) {
+    if (running) {
+      // Jogo acabou de abrir: a proxima escrita de rank (inicio do save)
+      // sincroniza na hora, em vez de esperar o flush periodico de 10min.
+      sessionJustStarted = true;
+    } else {
+      // Jogo acabou de fechar: verifica se a live do jogador encerrou e
+      // sincroniza qualquer coisa que ainda estivesse pendente, pra nao
+      // perder o estado final da sessao ate o proximo flush de 10min.
       sendLiveCheckHeartbeat(false).catch(() => {});
+      flushPendingRankSyncs();
     }
     updateTray();
     sendToRenderer('status-update', getStatusPayload());
