@@ -76,6 +76,26 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release
 
+      - name: Aplica notas de release (RELEASE_NOTES.md)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "RELEASE_NOTES.md vazio ou ausente — pulando (release fica sem notas, sem notificacao no Discord)."
+            exit 0
+          fi
+          echo "Aguardando release $TAG (até 15 min)..."
+          for i in $(seq 1 90); do
+            gh release view "$TAG" > /dev/null 2>&1 && break
+            echo "  tentativa $i/90 — aguardando 10s..."
+            sleep 10
+          done
+          TITLE="$(head -n 1 RELEASE_NOTES.md)"
+          tail -n +2 RELEASE_NOTES.md | sed '/./,$!d' > /tmp/release_body.md
+          gh release edit "$TAG" --title "$TITLE" --notes-file /tmp/release_body.md
+
   build-linux:
     runs-on: ubuntu-latest
     permissions:

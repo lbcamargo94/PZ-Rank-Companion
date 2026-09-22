@@ -1,0 +1,61 @@
+name: Discord Release Notify
+
+# O release do Companion e criado automaticamente pelo electron-builder
+# (--publish always, sem notas) durante o build da tag. As notas de verdade
+# (RELEASE_NOTES.md) so sao aplicadas DEPOIS, via "gh release edit" no job
+# build-windows de release.yml — por isso este workflow escuta "edited",
+# nao "published": e nesse momento que o conteudo real fica disponivel.
+on:
+  release:
+    types: [edited]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post release notes to Discord
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_BUGS_WEBHOOK_URL }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_URL: ${{ github.event.release.html_url }}
+          EMBED_COLOR: "3447003"
+          FOOTER_TEXT: "PZ-Rank Companion (app)"
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, sys, urllib.request
+
+          webhook = os.environ.get("WEBHOOK_URL")
+          if not webhook:
+              print("DISCORD_BUGS_WEBHOOK_URL nao configurado — pulando notificacao.")
+              sys.exit(0)
+
+          title = os.environ.get("RELEASE_NAME") or os.environ.get("TAG_NAME") or "Nova versao"
+          body = os.environ.get("RELEASE_BODY") or ""
+          url = os.environ.get("RELEASE_URL") or ""
+          color = int(os.environ.get("EMBED_COLOR", "3447003"))
+          footer = os.environ.get("FOOTER_TEXT", "")
+
+          if not body.strip():
+              print("Release sem notas — pulando notificacao no Discord.")
+              sys.exit(0)
+
+          if len(body) > 3900:
+              body = body[:3900] + "\n…"
+
+          embed = {"title": title[:256], "description": body, "color": color}
+          if url:
+              embed["url"] = url
+          if footer:
+              embed["footer"] = {"text": footer}
+
+          payload = {"embeds": [embed]}
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+          )
+          with urllib.request.urlopen(req) as resp:
+              print("Discord respondeu:", resp.status)
+          PYEOF
