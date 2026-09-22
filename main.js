@@ -647,8 +647,15 @@ function extractCodeFromContent(content) {
 // comentário de pendingRankContent acima pra explicação da agenda). Guarda o
 // conteúdo mais recente; só sincroniza na hora se for a primeira escrita desta
 // sessão (início do save) - o resto fica pendente pro flush periódico/de saída.
+//
+// Exceção: enquanto modOutdated=true, qualquer escrita sincroniza na hora, sem
+// esperar os até 10min do flush periódico. Sem isso, um jogador que acabasse de
+// atualizar o mod (ou desse fechar/abrir o jogo rápido o bastante pra escapar do
+// polling de 30s do checkGameRunning, que então nunca reseta sessionJustStarted)
+// ficava com o aviso de "mod desatualizado" bem depois de já estar tudo certo,
+// até algo forçar uma sincronização manual.
 function onRankFileWritten(content, filePath) {
-  if (sessionJustStarted) {
+  if (sessionJustStarted || modOutdated) {
     sessionJustStarted = false;
     lastSyncedContent.set(filePath, content);
     pendingRankContent.delete(filePath);
