@@ -96,6 +96,64 @@ jobs:
           tail -n +2 RELEASE_NOTES.md | sed '/./,$!d' > /tmp/release_body.md
           gh release edit "$TAG" --title "$TITLE" --notes-file /tmp/release_body.md
 
+      # gh release edit acima usa o GITHUB_TOKEN automático do Actions — o GitHub
+      # explicitamente NÃO dispara outros workflows (como o "release: edited" de
+      # discord-release-notify.yml) para eventos gerados por esse token, só pra
+      # edições feitas com um token/pessoa externa. Por isso postamos direto aqui,
+      # em vez de depender daquele workflow (que só serve de rede de segurança pra
+      # uma edição manual futura, feita por uma pessoa via `gh` local).
+      - name: Notifica no Discord
+        if: success()
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_BUGS_WEBHOOK_URL }}
+          RELEASE_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+        shell: bash
+        run: |
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "RELEASE_NOTES.md vazio ou ausente — pulando notificacao no Discord."
+            exit 0
+          fi
+          python3 - <<'PYEOF'
+          import json, os, sys, urllib.request, urllib.error
+
+          webhook = os.environ.get("WEBHOOK_URL")
+          if not webhook:
+              print("DISCORD_BUGS_WEBHOOK_URL nao configurado — pulando notificacao.")
+              sys.exit(0)
+
+          with open("RELEASE_NOTES.md", "r", encoding="utf-8") as f:
+              lines = f.read().splitlines()
+          title = (lines[0] if lines else "Nova versao").strip()
+          body  = "\n".join(lines[1:]).strip()
+          if not body:
+              print("RELEASE_NOTES.md sem corpo — pulando notificacao no Discord.")
+              sys.exit(0)
+          if len(body) > 3900:
+              body = body[:3900] + "\n…"
+
+          embed = {
+              "title": title[:256],
+              "description": body,
+              "color": 3447003,
+              "url": os.environ.get("RELEASE_URL") or "",
+              "footer": {"text": "PZ-Rank Companion (app)"},
+          }
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps({"embeds": [embed]}).encode("utf-8"),
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "PZRank-DiscordNotifier/1.0 (+https://github.com/lbcamargo94)",
+              },
+          )
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  print("Discord respondeu:", resp.status)
+          except urllib.error.HTTPError as e:
+              print("Discord respondeu com erro:", e.code, e.read().decode("utf-8", "replace"))
+              raise
+          PYEOF
+
   build-linux:
     runs-on: ubuntu-latest
     permissions:
