@@ -25,6 +25,16 @@ function signCode(playerToken, code) {
     .digest('hex');
 }
 
+// Assinatura das stats de ações (header X-Stats-Sig). Precisa montar EXATAMENTE a
+// mesma string que o backend (PZ-Rank backend/src/lib/companionStats.ts →
+// statsSignature/canonicalStats): chaves em ordem alfabética, "k=v" unidos por "&".
+function signStats(playerToken, code, character, stats) {
+  const canonical = Object.keys(stats).sort().map(k => `${k}=${String(stats[k])}`).join('&');
+  return crypto.createHmac('sha256', SYNC_HMAC_SECRET)
+    .update(`${playerToken}:${code}:${character}:${canonical}`)
+    .digest('hex');
+}
+
 // electron-updater é inicializado dentro de app.whenReady() para evitar o bug
 // onde require('electron-updater') acessa require('electron').app antes do runtime
 // Electron interceptar o módulo (em dev, node_modules/electron exporta apenas o path).
@@ -316,6 +326,8 @@ async function retryQueue() {
 
   for (const item of due) {
     try {
+      // Sem stats de propósito: o pz_rank_stats em disco pode ser mais novo que este
+      // código enfileirado. As stats seguem no próximo sync normal (são cumulativas).
       const result = await postSync(config.playerToken, item.code, item.disqualification_reason ?? null);
 
       const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: item.disqualification_reason ?? null };
@@ -696,12 +708,13 @@ async function handleNewRankFileContent(content, filePath) {
   const disqualification_reason = extracted.disqualification_reason ?? null;
   const charName               = charNameFromFilePath(filePath);
   const heatmap_delta          = readHeatmapDelta(charName);
+  const statsFile              = readStatsFile(charName);
 
   syncStatus = 'syncing';
   sendToRenderer('status-update', getStatusPayload());
 
   try {
-    const result = await postSync(config.playerToken, code, disqualification_reason, heatmap_delta);
+    const result = await postSync(config.playerToken, code, disqualification_reason, heatmap_delta, statsFile);
 
 
     const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: disqualification_reason ?? null };
@@ -1009,6 +1022,22 @@ function charNameFromFilePath(filePath) {
 
 // Tenta ler o arquivo de heatmap delta correspondente ao personagem.
 // Retorna array de pontos ou null se ausente/inválido.
+// Lê as stats de ações do personagem (pz_rank_stats_<char>.log, gravado pelo mod
+// no mesmo momento do arquivo de rank). Enviadas junto do sync desde a v2.5.0 —
+// o código PZRX9 slim não carrega mais esses contadores, então sem isso o site
+// nunca recebia ações (casas saqueadas, refeições...) nem liberava essas conquistas.
+// Retorna { character, stats } ou null se ausente/inválido (o sync segue sem stats).
+function readStatsFile(charName) {
+  if (!charName) return null;
+  const statsPath = path.join(config.watchDir, `pz_rank_stats_${charName}.log`);
+  try {
+    const data = JSON.parse(fs.readFileSync(statsPath, 'utf-8'));
+    if (!data || data.type !== 'rank_stats' || typeof data.character !== 'string') return null;
+    if (!data.stats || typeof data.stats !== 'object' || Array.isArray(data.stats)) return null;
+    return { character: data.character, stats: data.stats };
+  } catch { return null; }
+}
+
 function readHeatmapDelta(charName) {
   if (!charName) return null;
   const heatmapPath = path.join(config.watchDir, `pz_rank_heatmap_${charName}.log`);
@@ -1018,12 +1047,19 @@ function readHeatmapDelta(charName) {
   } catch { return null; }
 }
 
-function postSync(playerToken, code, disqualificationReason = null, heatmapDelta = null) {
+function postSync(playerToken, code, disqualificationReason = null, heatmapDelta = null, statsFile = null) {
   return new Promise((resolve, reject) => {
     const payload = { player_token: playerToken, code };
     if (disqualificationReason) payload.disqualification_reason = disqualificationReason;
     if (heatmapDelta && heatmapDelta.length > 0) payload.heatmap_delta = heatmapDelta;
+    const headers = { 'Content-Type': 'application/json', 'X-Code-Sig': signCode(playerToken, code) };
+    if (statsFile) {
+      payload.stats           = statsFile.stats;
+      payload.stats_character = statsFile.character;
+      headers['X-Stats-Sig']  = signStats(playerToken, code, statsFile.character, statsFile.stats);
+    }
     const body = JSON.stringify(payload);
+    headers['Content-Length'] = Buffer.byteLength(body);
     const u    = new URL(config.apiUrl + '/sync/update');
     const lib  = u.protocol === 'https:' ? https : http;
 
@@ -1033,11 +1069,7 @@ function postSync(playerToken, code, disqualificationReason = null, heatmapDelta
         port:     u.port || (u.protocol === 'https:' ? 443 : 80),
         path:     u.pathname,
         method:   'POST',
-        headers:  {
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'X-Code-Sig':     signCode(playerToken, code),
-        },
+        headers,
       },
       (res) => {
         let data = '';
