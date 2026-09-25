@@ -212,6 +212,14 @@ let watcherError    = null;    // null = ok, string = mensagem de erro
 let gameRunning     = false;   // true se ProjectZomboid64.exe está em execução
 let lastRankFileTime = null;   // timestamp do último arquivo PZR processado
 let modOutdated      = false;  // true quando backend retorna 426 (mod desatualizado)
+// v2.6.0: versão do mod que o servidor recusou (lida de dentro do código de sync).
+// Enquanto o mod gravar códigos DESSA versão, não adianta reenviar — cada envio
+// voltava 426 de novo (na troca pra 2.26.0: 1.493 recusas de 36 jogadores em ~30
+// min, uma a cada ~6s por jogador) e o aviso aparecia a cada vez.
+let outdatedModVersion = null;
+let outdatedLastTry    = 0;
+let outdatedNotified   = null;   // versão já avisada (notifica 1x por versão)
+const OUTDATED_RETRY_MS = 10 * 60 * 1000; // mesma versão recusada: no máx. 1 tentativa/10min
 let gameJavaPid      = null;   // PID do java.exe rodando o PZ (Windows — fallback via powershell)
 
 // Agenda de sync (não mais "um sync por escrita de arquivo"): o mod grava o
@@ -333,7 +341,7 @@ async function retryQueue() {
       const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: item.disqualification_reason ?? null };
       lastSync   = syncEntry;
       syncStatus = 'ok';
-      if (modOutdated) modOutdated = false;
+      if (modOutdated) clearModOutdated();
       // Reseta o relógio do heartbeat: o sync confirma que o mod está ativo,
       // evitando que o heartbeat dispare logo após um retry bem-sucedido da fila.
       lastRankFileTime = Date.now();
@@ -352,9 +360,7 @@ async function retryQueue() {
         break;
       }
       if (err.status === 426) {
-        modOutdated = true;
-        saveQueue([]); // descarta todos os códigos: foram gerados pelo mod antigo e nunca passarão
-        notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam.', 'system');
+        markModOutdated(item.code);
         break;
       }
       const retries = (item.retries ?? 0) + 1;
@@ -623,6 +629,44 @@ async function triggerManualSync() {
   }
 }
 
+// Lê a versão do mod de dentro do código PZRX (campo 11 do payload). O código é só
+// ofuscado (XOR com chave fixa — a mesma do mod RankCode.lua e do backend
+// decoder.ts), não é segredo. Retorna null se não conseguir ler.
+const PZR_XOR_KEY = 'PZRank-Community-2026-Key!';
+function modVersionFromCode(code) {
+  try {
+    const m = /^PZRX\d:([\s\S]+)$/.exec(String(code || '').trim());
+    if (!m) return null;
+    const data = Buffer.from(m[1].replace(/\s+/g, ''), 'base64');
+    const key  = Buffer.from(PZR_XOR_KEY, 'utf8');
+    const out  = Buffer.allocUnsafe(data.length);
+    for (let i = 0; i < data.length; i++) out[i] = data[i] ^ key[i % key.length];
+    const parts = out.toString('latin1').split('|');
+    if (parts[0] !== 'PZR') return null;
+    const v = (parts[11] || '').trim();
+    return /^\d+(\.\d+)*$/.test(v) ? v : null;
+  } catch { return null; }
+}
+
+// Servidor recusou por mod desatualizado (HTTP 426).
+function markModOutdated(code) {
+  modOutdated        = true;
+  outdatedModVersion = modVersionFromCode(code);
+  outdatedLastTry    = Date.now();
+  saveQueue([]); // descarta a fila: códigos do mod antigo nunca vão passar
+  const key = outdatedModVersion || '?';
+  if (outdatedNotified !== key) {
+    outdatedNotified = key;
+    notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam (feche e abra o jogo para a Steam atualizar).', 'system');
+  }
+}
+
+function clearModOutdated() {
+  modOutdated = false;
+  outdatedModVersion = null;
+  outdatedNotified = null;
+}
+
 function extractCodeFromContent(content) {
   try {
     const lines = content.split('\n').map(l => l.trim());
@@ -667,6 +711,17 @@ function extractCodeFromContent(content) {
 // ficava com o aviso de "mod desatualizado" bem depois de já estar tudo certo,
 // até algo forçar uma sincronização manual.
 function onRankFileWritten(content, filePath) {
+  // Mod desatualizado e o código novo ainda é da MESMA versão recusada: não envia
+  // (voltaria 426 de novo). Guarda como pendente — o flush de 10min ainda tenta,
+  // cobrindo o caso de o servidor baixar a versão mínima. Versão diferente (jogador
+  // atualizou o mod) → sincroniza na hora, como antes.
+  if (modOutdated && outdatedModVersion) {
+    const v = modVersionFromCode(extractCodeFromContent(content)?.code);
+    if (v === outdatedModVersion && Date.now() - outdatedLastTry < OUTDATED_RETRY_MS) {
+      pendingRankContent.set(filePath, content);
+      return;
+    }
+  }
   if (sessionJustStarted || modOutdated) {
     sessionJustStarted = false;
     lastSyncedContent.set(filePath, content);
@@ -720,7 +775,7 @@ async function handleNewRankFileContent(content, filePath) {
     const syncEntry = { ts: Date.now(), characterName: result.character_name, score: result.score, rankPosition: result.rank_position ?? null, isAlive: result.is_alive, ok: true, disqualificationReason: disqualification_reason ?? null };
     lastSync   = syncEntry;
     syncStatus = 'ok';
-    if (modOutdated) modOutdated = false;
+    if (modOutdated) clearModOutdated();
     pushHistory(syncEntry);
 
     const body = result.character_name
@@ -744,9 +799,7 @@ async function handleNewRankFileContent(content, filePath) {
       showMainWindow();
       notify('✗ Sessão expirada', 'Reconecte o jogador no app.', 'system');
     } else if (err.status === 426) {
-      modOutdated = true;
-      saveQueue([]); // descarta fila: todos os códigos pendentes são do mod antigo
-      notify('⚠ Mod desatualizado', 'Atualize o mod PZ Community Rank na Oficina da Steam para continuar sincronizando.', 'system');
+      markModOutdated(code);
     } else if (err.status === 409 && err.body?.code === 'PLAYER_REMOVED') {
       saveQueue([]); // descarta fila: sync nunca vai passar enquanto moderador não reativar
       notify('✗ Personagem removido do rank', 'Contate um moderador para reativação.', 'system');

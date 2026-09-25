@@ -1,8 +1,9 @@
-PZ-Rank Companion v2.5.0 — Suas ações agora contam no site
+PZ-Rank Companion v2.6.0 — Menos avisos quando o mod está desatualizado
 
-Novidades:
-• O Companion passa a enviar ao site o que o seu personagem faz durante a run: casas saqueadas, itens fabricados, refeições, ovos, leite, árvores cortadas, cidades visitadas e mais.
-• Com isso, as conquistas dessas ações (Saqueador, Cozinheiro, Construtor, Primeiros Ovos e outras) voltam a ser liberadas no seu perfil do site — antes elas só apareciam aqui no app.
-• Esses números também alimentam a nova seção "O que os sobreviventes fazem" na página de Estatísticas do campeonato.
+Melhorias:
+• Quando o mod PZ Community Rank está desatualizado, o aviso agora aparece uma única vez, em vez de se repetir a cada poucos segundos enquanto você joga.
+• Nesse período o app para de reenviar seus dados à toa: ele espera você atualizar o mod e sincroniza na hora assim que a versão nova é carregada.
+• Nada se perde: o primeiro sync depois da atualização envia seu progresso completo (dias, kills e habilidades).
 
-Nada muda na sua privacidade: são os mesmos contadores que o mod já registrava, sem posição nem rastreamento.
+Dica:
+• A Steam atualiza o mod quando você fecha e abre o jogo de novo.
