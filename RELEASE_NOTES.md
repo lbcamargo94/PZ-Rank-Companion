@@ -1,9 +1,9 @@
-PZ-Rank Companion v2.6.0 — Menos avisos quando o mod está desatualizado
+PZ-Rank Companion v2.6.1 — Atualização automática de volta
 
-Melhorias:
-• Quando o mod PZ Community Rank está desatualizado, o aviso agora aparece uma única vez, em vez de se repetir a cada poucos segundos enquanto você joga.
-• Nesse período o app para de reenviar seus dados à toa: ele espera você atualizar o mod e sincroniza na hora assim que a versão nova é carregada.
-• Nada se perde: o primeiro sync depois da atualização envia seu progresso completo (dias, kills e habilidades).
+Correções:
+• A verificação de atualizações voltou a funcionar. A v2.6.0 mostrava "Erro ao verificar atualizações" com um texto longo do GitHub: o endereço de onde o app baixa as versões mudou.
+• Quando a verificação falha, o aviso agora mostra só o motivo, numa linha.
 
-Dica:
-• A Steam atualiza o mod quando você fecha e abre o jogo de novo.
+Importante para quem está na v2.6.0:
+• Essa versão não consegue se atualizar sozinha. Baixe e instale a v2.6.1 uma única vez pela página de downloads do site (pzrank.com.br). Seus dados e sua conta continuam como estão.
+• Daqui em diante as atualizações voltam a chegar sozinhas.

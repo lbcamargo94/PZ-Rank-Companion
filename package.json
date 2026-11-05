@@ -1,6 +1,6 @@
 {
   "name": "pz-rank-companion",
-  "version": "2.6.0",
+  "version": "2.6.1",
   "description": "PZ Community Rank - Auto-sync companion",
   "author": {
     "name": "lbcamargo94",
@@ -13,9 +13,9 @@
     "build": "electron-builder --win",
     "build:mac": "electron-builder --mac",
     "build:linux": "electron-builder --linux",
-    "release": "electron-builder --win --publish always",
-    "release:mac": "electron-builder --mac --publish always",
-    "release:linux": "electron-builder --linux --publish always"
+    "release": "electron-builder --win --publish never",
+    "release:mac": "electron-builder --mac --publish never",
+    "release:linux": "electron-builder --linux --publish never"
   },
   "dependencies": {
     "better-sqlite3": "^12.11.1",
@@ -47,7 +47,7 @@
     "publish": {
       "provider": "github",
       "owner": "lbcamargo94",
-      "repo": "PZ-Rank-Companion",
+      "repo": "PZ-Rank-Companion-Releases",
       "releaseType": "release"
     },
     "win": {

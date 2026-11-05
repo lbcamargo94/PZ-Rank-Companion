@@ -86,10 +86,21 @@ function initAutoUpdater() {
     updateTray();
   });
   autoUpdater.on('error', (err) => {
-    const msg = err.message || String(err);
-    setUpdateState({ phase: 'error', message: msg });
-    console.error('[updater]', msg);
+    console.error('[updater]', err.message || String(err));
+    setUpdateState({ phase: 'error', message: updateErrorMessage(err) });
   });
+}
+
+// O electron-updater põe na mensagem a resposta HTTP inteira (cabeçalhos e cookies do
+// GitHub): na tela fica só o motivo, numa linha.
+function updateErrorMessage(err) {
+  const raw = (err && err.message) || String(err);
+  if (/\b404\b/.test(raw)) return 'Página de versões não encontrada (404). Baixe a versão mais recente em pzrank.com.br.';
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|ERR_INTERNET_DISCONNECTED|net::ERR_/.test(raw)) {
+    return 'Sem conexão com o servidor de atualizações. O app tenta de novo mais tarde.';
+  }
+  const first = raw.split(/\r?\n|\\n/)[0].trim();
+  return first.length > 200 ? first.slice(0, 200) + '…' : first;
 }
 
 // ── Config ────────────────────────────────────────────────────────────────
@@ -423,7 +434,7 @@ app.whenReady().then(() => {
   if (supportsAutoUpdate) {
     setUpdateState({ phase: 'checking' });
     setTimeout(() => autoUpdater && autoUpdater.checkForUpdates().catch((err) => {
-      setUpdateState({ phase: 'error', message: err.message || String(err) });
+      setUpdateState({ phase: 'error', message: updateErrorMessage(err) });
     }), 4000);
     setInterval(() => autoUpdater && autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60_000);
   } else if (app.isPackaged) {
@@ -1283,7 +1294,7 @@ ipcMain.handle('check-for-updates', async () => {
     return;
   }
   try { await autoUpdater.checkForUpdates(); }
-  catch (err) { sendToRenderer('update-status', { phase: 'error', message: err.message }); }
+  catch (err) { sendToRenderer('update-status', { phase: 'error', message: updateErrorMessage(err) }); }
 });
 
 ipcMain.handle('install-update', () => {

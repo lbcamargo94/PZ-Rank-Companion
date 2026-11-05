@@ -29,7 +29,7 @@ Project Zomboid
 
 ## Instalação
 
-Baixe o instalador ou o executável portátil na página de [Releases](https://github.com/lbcamargo94/PZ-Rank-Companion/releases):
+Baixe o instalador ou o executável portátil na página de [Releases](https://github.com/lbcamargo94/PZ-Rank-Companion-Releases/releases):
 
 | Arquivo | Descrição |
 |---|---|
