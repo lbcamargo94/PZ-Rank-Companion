@@ -963,7 +963,7 @@ function postSandbox(playerToken, sandboxData) {
         port:     u.port || (u.protocol === 'https:' ? 443 : 80),
         path:     u.pathname,
         method:   'POST',
-        headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...companionHeaders() },
       },
       (res) => {
         let data = '';
@@ -1116,7 +1116,7 @@ function postSync(playerToken, code, disqualificationReason = null, heatmapDelta
     const payload = { player_token: playerToken, code };
     if (disqualificationReason) payload.disqualification_reason = disqualificationReason;
     if (heatmapDelta && heatmapDelta.length > 0) payload.heatmap_delta = heatmapDelta;
-    const headers = { 'Content-Type': 'application/json', 'X-Code-Sig': signCode(playerToken, code) };
+    const headers = { 'Content-Type': 'application/json', 'X-Code-Sig': signCode(playerToken, code), ...companionHeaders() };
     if (statsFile) {
       payload.stats           = statsFile.stats;
       payload.stats_character = statsFile.character;
@@ -1389,11 +1389,18 @@ function sendToRenderer(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, data);
 }
 
+// Versão do app em toda chamada ao site (v2.7.0): o site passa a saber quem está num
+// Companion antigo e avisa no perfil do jogador. Antes disso, não havia como achar quem
+// ficou preso na v2.6.0, cujo atualizador automático parou de funcionar.
+function companionHeaders() {
+  return { 'X-Companion-Version': app.getVersion() };
+}
+
 function getRequest(url) {
   return new Promise((resolve, reject) => {
     const u   = new URL(url);
     const lib = u.protocol === 'https:' ? https : http;
-    lib.get(url, (res) => {
+    lib.get(url, { headers: companionHeaders() }, (res) => {
       let data = '';
       res.on('data', (c) => (data += c));
       res.on('end', () => {
@@ -1417,7 +1424,7 @@ function postRequest(url, body) {
       path:     u.pathname + u.search,
       port:     u.port || (u.protocol === 'https:' ? 443 : 80),
       method:   'POST',
-      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) },
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload), ...companionHeaders() },
     };
     const req = lib.request(options, (res) => {
       let data = '';

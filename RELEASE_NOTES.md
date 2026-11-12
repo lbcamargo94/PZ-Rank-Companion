@@ -1,9 +1,7 @@
-PZ-Rank Companion v2.6.1 — Atualização automática de volta
+PZ-Rank Companion v2.7.0 — Aviso de versão antiga no site
 
-Correções:
-• A verificação de atualizações voltou a funcionar. A v2.6.0 mostrava "Erro ao verificar atualizações" com um texto longo do GitHub: o endereço de onde o app baixa as versões mudou.
-• Quando a verificação falha, o aviso agora mostra só o motivo, numa linha.
+Melhorias:
+• O Companion passa a informar ao site a versão que está instalada. Assim, o perfil de quem ainda usa uma versão antiga mostra um aviso com o link para baixar a nova.
 
-Importante para quem está na v2.6.0:
-• Essa versão não consegue se atualizar sozinha. Baixe e instale a v2.6.1 uma única vez pela página de downloads do site (pzrank.com.br). Seus dados e sua conta continuam como estão.
-• Daqui em diante as atualizações voltam a chegar sozinhas.
+Importante para quem ainda está na v2.6.0:
+• Essa versão não consegue se atualizar sozinha. Baixe e instale a versão nova uma única vez pela página de downloads do site (pzrank.com.br). Seus dados e sua conta continuam como estão.
